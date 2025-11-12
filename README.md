@@ -6,7 +6,14 @@
 Latest release https://github.com/rlxone/MultiSoundChanger/releases
 
 A small tool for changing sound volume **even for aggregate devices** cause native sound volume controller can't change volume of aggregate devices (it was always pain in the ass with my laptop).
- 
+
+### ARM64 (Apple Silicon) Support
+
+This version has been rebuilt to support both Intel (x86_64) and Apple Silicon (ARM64) Macs natively. See [ARM64_MIGRATION.md](ARM64_MIGRATION.md) for details about the changes.
+
+**Architecture Support**:
+- Intel Macs (x86_64)
+- Apple Silicon Macs (ARM64: M1, M2, M3, M4)
 
 
 Features:
