@@ -11,7 +11,7 @@ import MediaKeyTap
 
 // MARK: - Protocols
 
-protocol ApplicationController: class {
+protocol ApplicationController: AnyObject {
     func start()
 }
 

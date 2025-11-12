@@ -12,11 +12,11 @@ import MediaKeyTap
 
 // MARK: - Protocols
 
-protocol MediaManagerDelegate: class {
+protocol MediaManagerDelegate: AnyObject {
     func onMediaKeyTap(mediaKey: MediaKey)
 }
 
-protocol MediaManager: class {
+protocol MediaManager: AnyObject {
     func listenMediaKeyTaps()
     func showOSD(volume: Float, chicletsCount: Int)
 }
@@ -43,22 +43,20 @@ final class MediaManagerImpl: MediaManager {
     }
     
     func showOSD(volume: Float, chicletsCount: Int = 16) {
-        guard let manager = OSDManager.sharedManager() as? OSDManager else {
-            return
-        }
-        
+        let manager = OSDManager.sharedManager()
+
         let mouseloc: NSPoint = NSEvent.mouseLocation
         var displayForPoint: CGDirectDisplayID = 0
         var count: UInt32 = 0
-        
+
         if CGGetDisplaysWithPoint(mouseloc, 1, &displayForPoint, &count) != .success {
             Logger.warning(Constants.InnerMessages.getDisplayError)
             displayForPoint = CGMainDisplayID()
         }
-        
-        let image = (volume == 0) ? OSDGraphicSpeakerMuted.rawValue : OSDGraphicSpeaker.rawValue
+
+        let image = (volume == 0) ? OSDGraphic.speakerMuted.rawValue : OSDGraphic.speaker.rawValue
         let volumeStep: Float = 100 / Float(chicletsCount)
-        
+
         manager.showImage(
             Int64(image),
             onDisplayID: displayForPoint,

@@ -9,7 +9,8 @@ import Cocoa
 import Foundation
 
 // OSD Graphics enum to match the original framework
-@objc enum OSDGraphic: Int {
+@objc
+enum OSDGraphic: Int {
     case backlight = 1
     case speaker = 3
     case speakerMuted = 4
@@ -30,10 +31,12 @@ import Foundation
     private var osdWindow: OSDWindow?
 
     @objc static func sharedManager() -> OSDManager {
-        if shared == nil {
-            shared = OSDManager()
+        if let existingManager = shared {
+            return existingManager
         }
-        return shared!
+        let newManager = OSDManager()
+        shared = newManager
+        return newManager
     }
 
     private override init() {
@@ -55,7 +58,7 @@ import Foundation
                 displayID: displayID,
                 filledChiclets: Int(filledChiclets),
                 totalChiclets: Int(totalChiclets),
-                fadeDelay: TimeInterval(msecUntilFade) / 1000.0
+                fadeDelay: TimeInterval(msecUntilFade) / 1_000.0
             )
         }
     }
@@ -78,7 +81,9 @@ import Foundation
             return screenNumber == displayID
         } ?? NSScreen.main
 
-        guard let targetScreen = screen else { return }
+        guard let targetScreen = screen else {
+            return
+        }
 
         // Create and show OSD window
         let window = OSDWindow(
@@ -140,10 +145,10 @@ private class OSDWindow: NSWindow {
         self.alphaValue = 0
         self.makeKeyAndOrderFront(nil)
 
-        NSAnimationContext.runAnimationGroup({ context in
+        NSAnimationContext.runAnimationGroup { context in
             context.duration = 0.2
             self.animator().alphaValue = 1.0
-        })
+        }
 
         // Schedule fade out
         fadeTimer?.invalidate()
@@ -278,7 +283,9 @@ private class OSDContentView: NSView {
     }
 
     private func drawChiclets(in rect: NSRect) {
-        guard totalChiclets > 0 else { return }
+        guard totalChiclets > 0 else {
+            return
+        }
 
         let chicletAreaWidth = rect.width - 60
         let chicletAreaHeight: CGFloat = 8
