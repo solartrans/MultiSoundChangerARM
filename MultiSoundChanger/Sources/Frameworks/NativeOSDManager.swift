@@ -26,11 +26,13 @@ enum OSDGraphic: Int {
 }
 
 // Native OSD Manager implementation using NSWindow
-@objc class OSDManager: NSObject {
+@objc
+class OSDManager: NSObject {
     private static var shared: OSDManager?
     private var osdWindow: OSDWindow?
 
-    @objc static func sharedManager() -> OSDManager {
+    @objc
+    static func sharedManager() -> OSDManager {
         if let existingManager = shared {
             return existingManager
         }
@@ -43,7 +45,8 @@ enum OSDGraphic: Int {
         super.init()
     }
 
-    @objc func showImage(
+    @objc
+    func showImage(
         _ image: Int64,
         onDisplayID displayID: CGDirectDisplayID,
         priority: UInt32,
@@ -188,7 +191,7 @@ private class OSDContentView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
 
-        let context = NSGraphicsContext.current?.cgContext
+        _ = NSGraphicsContext.current?.cgContext
 
         // Draw background rounded rectangle
         let backgroundRect = bounds.insetBy(dx: 20, dy: 20)

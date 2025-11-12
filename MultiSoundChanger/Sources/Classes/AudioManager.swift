@@ -11,7 +11,7 @@ import Foundation
 
 // MARK: - Protocols
 
-protocol AudioManager: class {
+protocol AudioManager: AnyObject {
     func getDefaultOutputDevice() -> AudioDeviceID
     func getOutputDevices() -> [AudioDeviceID: String]?
     func selectDevice(deviceID: AudioDeviceID)
@@ -19,7 +19,7 @@ protocol AudioManager: class {
     func setSelectedDeviceVolume(masterChannelLevel: Float, leftChannelLevel: Float, rightChannelLevel: Float)
     func isSelectedDeviceMuted() -> Bool
     func toggleMute()
-    
+
     var isMuted: Bool { get }
 }
 
@@ -60,11 +60,9 @@ final class AudioManagerImpl: AudioManager {
         
         if audio.isAggregateDevice(deviceID: selectedDevice) {
             let aggregatedDevices = audio.getAggregateDeviceSubDeviceList(deviceID: selectedDevice)
-            
-            for device in aggregatedDevices {
-                if audio.isOutputDevice(deviceID: device) {
-                    return audio.getDeviceVolume(deviceID: device).max()
-                }
+
+            for device in aggregatedDevices where audio.isOutputDevice(deviceID: device) {
+                return audio.getDeviceVolume(deviceID: device).max()
             }
         } else {
             return audio.getDeviceVolume(deviceID: selectedDevice).max()

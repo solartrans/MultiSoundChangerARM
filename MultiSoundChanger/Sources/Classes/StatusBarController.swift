@@ -11,7 +11,7 @@ import Cocoa
 
 // MARK: - Protocols
 
-protocol StatusBarController: class {
+protocol StatusBarController: AnyObject {
     func createMenu()
     func changeStatusItemImage(value: Float)
     func updateVolume(value: Float)
