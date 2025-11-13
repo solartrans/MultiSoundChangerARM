@@ -129,8 +129,7 @@ private class OSDWindow: NSWindow {
             contentRect: rect,
             styleMask: [.borderless],
             backing: .buffered,
-            defer: false,
-            screen: screen
+            defer: false
         )
 
         // Window configuration
@@ -142,6 +141,11 @@ private class OSDWindow: NSWindow {
         self.contentView = contentPanel
         self.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
         self.animationBehavior = .utilityWindow
+
+        // Position on the correct screen
+        if let currentScreen = NSScreen.screens.first(where: { $0 == screen }) {
+            self.setFrameOrigin(NSPoint(x: xPos, y: yPos))
+        }
     }
 
     func show(fadeAfter delay: TimeInterval) {
