@@ -73,8 +73,12 @@ class OSDManager: NSObject {
         totalChiclets: Int,
         fadeDelay: TimeInterval
     ) {
-        // Close existing window if any
-        osdWindow?.close()
+        // Properly cleanup existing window if any
+        if let existingWindow = osdWindow {
+            existingWindow.cleanup()
+            existingWindow.close()
+            osdWindow = nil
+        }
 
         // Get the screen for the display
         let screen = NSScreen.screens.first { screen in
@@ -148,6 +152,16 @@ private class OSDWindow: NSWindow {
         }
     }
 
+    deinit {
+        cleanup()
+    }
+
+    func cleanup() {
+        fadeTimer?.invalidate()
+        fadeTimer = nil
+        NSAnimationContext.endGrouping()
+    }
+
     func show(fadeAfter delay: TimeInterval) {
         self.alphaValue = 0
         self.makeKeyAndOrderFront(nil)
@@ -165,11 +179,18 @@ private class OSDWindow: NSWindow {
     }
 
     private func fadeOut() {
+        guard !self.isReleasedWhenClosed || self.isVisible else {
+            return
+        }
+
+        fadeTimer?.invalidate()
+        fadeTimer = nil
+
         NSAnimationContext.runAnimationGroup({ context in
             context.duration = 0.3
             self.animator().alphaValue = 0
-        }, completionHandler: {
-            self.close()
+        }, completionHandler: { [weak self] in
+            self?.close()
         })
     }
 }
