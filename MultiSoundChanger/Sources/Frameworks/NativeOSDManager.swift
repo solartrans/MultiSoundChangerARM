@@ -73,10 +73,18 @@ class OSDManager: NSObject {
         totalChiclets: Int,
         fadeDelay: TimeInterval
     ) {
+        // Ensure we're on main thread
+        assert(Thread.isMainThread, "OSD must be displayed on main thread")
+
         // Properly cleanup existing window if any
         if let existingWindow = osdWindow {
             existingWindow.cleanup()
-            existingWindow.close()
+            // Use orderOut instead of close to avoid immediate deallocation
+            existingWindow.orderOut(nil)
+            // Schedule close for next run loop to ensure cleanup completes
+            DispatchQueue.main.async {
+                existingWindow.close()
+            }
             osdWindow = nil
         }
 
@@ -100,8 +108,13 @@ class OSDManager: NSObject {
             screen: targetScreen
         )
 
+        // Retain the window before showing
         osdWindow = window
-        window.show(fadeAfter: fadeDelay)
+
+        // Show on next run loop iteration to ensure proper setup
+        DispatchQueue.main.async {
+            window.show(fadeAfter: fadeDelay)
+        }
     }
 }
 
@@ -159,10 +172,13 @@ private class OSDWindow: NSWindow {
     func cleanup() {
         fadeTimer?.invalidate()
         fadeTimer = nil
-        NSAnimationContext.endGrouping()
     }
 
     func show(fadeAfter delay: TimeInterval) {
+        // Cancel any pending fade operations
+        fadeTimer?.invalidate()
+        fadeTimer = nil
+
         self.alphaValue = 0
         self.makeKeyAndOrderFront(nil)
 
@@ -171,26 +187,33 @@ private class OSDWindow: NSWindow {
             self.animator().alphaValue = 1.0
         }
 
-        // Schedule fade out
-        fadeTimer?.invalidate()
-        fadeTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
-            self?.fadeOut()
+        // Schedule fade out on main thread
+        fadeTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] timer in
+            guard let self = self, timer.isValid else { return }
+            DispatchQueue.main.async { [weak self] in
+                self?.fadeOut()
+            }
         }
     }
 
     private func fadeOut() {
-        guard !self.isReleasedWhenClosed || self.isVisible else {
+        // Double check we're still valid
+        guard self.isVisible else {
             return
         }
 
+        // Cancel timer first
         fadeTimer?.invalidate()
         fadeTimer = nil
 
-        NSAnimationContext.runAnimationGroup({ context in
+        // Fade out and close
+        NSAnimationContext.runAnimationGroup({ [weak self] context in
             context.duration = 0.3
-            self.animator().alphaValue = 0
-        }, completionHandler: { [weak self] in
-            self?.close()
+            context.completionHandler = { [weak self] in
+                self?.orderOut(nil)
+                self?.close()
+            }
+            self?.animator().alphaValue = 0
         })
     }
 }
