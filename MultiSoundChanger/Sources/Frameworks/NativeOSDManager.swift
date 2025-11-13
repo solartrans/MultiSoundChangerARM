@@ -73,20 +73,9 @@ class OSDManager: NSObject {
         totalChiclets: Int,
         fadeDelay: TimeInterval
     ) {
-        // Ensure we're on main thread
-        assert(Thread.isMainThread, "OSD must be displayed on main thread")
-
-        // Properly cleanup existing window if any
-        if let existingWindow = osdWindow {
-            existingWindow.cleanup()
-            // Use orderOut instead of close to avoid immediate deallocation
-            existingWindow.orderOut(nil)
-            // Schedule close for next run loop to ensure cleanup completes
-            DispatchQueue.main.async {
-                existingWindow.close()
-            }
-            osdWindow = nil
-        }
+        // Cleanup existing window synchronously
+        osdWindow?.cleanup()
+        osdWindow = nil
 
         // Get the screen for the display
         let screen = NSScreen.screens.first { screen in
@@ -100,7 +89,7 @@ class OSDManager: NSObject {
             return
         }
 
-        // Create and show OSD window
+        // Create and show OSD window immediately
         let window = OSDWindow(
             graphic: graphic,
             filledChiclets: filledChiclets,
@@ -108,13 +97,11 @@ class OSDManager: NSObject {
             screen: targetScreen
         )
 
-        // Retain the window before showing
+        // Store strong reference
         osdWindow = window
 
-        // Show on next run loop iteration to ensure proper setup
-        DispatchQueue.main.async {
-            window.show(fadeAfter: fadeDelay)
-        }
+        // Show immediately (no async)
+        window.show(fadeAfter: fadeDelay)
     }
 }
 
@@ -155,6 +142,7 @@ private class OSDWindow: NSWindow {
         self.level = .statusBar
         self.ignoresMouseEvents = true
         self.hasShadow = false
+        self.isReleasedWhenClosed = false  // Prevent automatic deallocation
         self.contentView = contentPanel
         self.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
         self.animationBehavior = .utilityWindow
@@ -172,49 +160,35 @@ private class OSDWindow: NSWindow {
     func cleanup() {
         fadeTimer?.invalidate()
         fadeTimer = nil
+        self.orderOut(nil)
     }
 
     func show(fadeAfter delay: TimeInterval) {
-        // Cancel any pending fade operations
+        // Cancel any existing timer
         fadeTimer?.invalidate()
         fadeTimer = nil
 
-        self.alphaValue = 0
+        // Show window immediately without animation
+        self.alphaValue = 1.0
         self.makeKeyAndOrderFront(nil)
 
-        NSAnimationContext.runAnimationGroup { context in
-            context.duration = 0.2
-            self.animator().alphaValue = 1.0
-        }
-
-        // Schedule fade out on main thread
-        fadeTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] timer in
-            guard let self = self, timer.isValid else { return }
-            DispatchQueue.main.async { [weak self] in
-                self?.fadeOut()
-            }
+        // Schedule fade out (simplified)
+        fadeTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+            self?.fadeOut()
         }
     }
 
     private func fadeOut() {
-        // Double check we're still valid
-        guard self.isVisible else {
-            return
-        }
-
-        // Cancel timer first
         fadeTimer?.invalidate()
         fadeTimer = nil
 
-        // Fade out and close
-        NSAnimationContext.runAnimationGroup({ [weak self] context in
-            context.duration = 0.3
-            context.completionHandler = { [weak self] in
-                self?.orderOut(nil)
-                self?.close()
-            }
-            self?.animator().alphaValue = 0
-        })
+        // Simple fade out without complex animations
+        self.animator().alphaValue = 0
+
+        // Close after a brief delay for fade
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            self?.orderOut(nil)
+        }
     }
 }
 
