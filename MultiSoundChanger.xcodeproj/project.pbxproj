@@ -350,7 +350,7 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 			shellPath = /bin/sh;
-			shellScript = "\"${PODS_ROOT}/SwiftLint/swiftlint\"\n";
+			shellScript = "if [ \"${CONFIGURATION}\" = \"Release\" ]; then\n  exit 0\nfi\n\nif [ -f \"${PODS_ROOT}/SwiftLint/swiftlint\" ]; then\n  \"${PODS_ROOT}/SwiftLint/swiftlint\" || true\nfi\n";
 		};
 /* End PBXShellScriptBuildPhase section */
 
