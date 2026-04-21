@@ -43,6 +43,14 @@ final class AudioManagerImpl: AudioManager {
     private var listenerTokens: [AudioListenerToken] = []
     private var volumeBeforeMute: Float?
 
+    // Coalesce rapid `setSelectedDeviceVolume` calls (media-key repeat, slider drag) into a
+    // single trailing-edge HAL write. Callers paint UI synchronously using the returned-from-
+    // `getSelectedDeviceVolume` pending value; the HAL write fires `halApplyDelay` after the
+    // most recent call.
+    private var pendingTargetVolume: Float?
+    private var pendingApplyItem: DispatchWorkItem?
+    private static let halApplyDelay: TimeInterval = 1.0 / 30.0
+
     init() {
         devices = audio.getOutputDevices()
         let defaultDevice = audio.getDefaultOutputDevice()
@@ -52,6 +60,7 @@ final class AudioManagerImpl: AudioManager {
     }
 
     deinit {
+        pendingApplyItem?.cancel()
         for token in listenerTokens {
             audio.removeListener(token)
         }
@@ -66,35 +75,81 @@ final class AudioManagerImpl: AudioManager {
     }
 
     func selectDevice(deviceID: AudioDeviceID) {
+        cancelPendingVolumeApply()
         selectedDevice = deviceID
         audio.setOutputDevice(newDeviceID: deviceID)
         Logger.debug(Constants.InnerMessages.selectDevice(deviceID: String(deviceID)))
     }
 
     func adoptSelectedDevice(deviceID: AudioDeviceID) {
+        cancelPendingVolumeApply()
         selectedDevice = deviceID
         Logger.debug(Constants.InnerMessages.selectDevice(deviceID: String(deviceID)))
     }
 
     func getSelectedDeviceVolume() -> Float? {
-        guard let selectedDevice = selectedDevice else {
-            return nil
+        // Prefer the most recent user-requested value so media-key quantization at the top of
+        // `onMediaKeyTap` and slider-drag reads see consistent state across rapid events, even
+        // when the debounced HAL write for the previous event hasn't fired yet. Falls through
+        // to a live HAL read when nothing's pending (fresh app launch, post-device-switch, etc.).
+        if let pending = pendingTargetVolume {
+            return pending
         }
-
-        if audio.isAggregateDevice(deviceID: selectedDevice) {
-            let aggregatedDevices = audio.getAggregateDeviceSubDeviceList(deviceID: selectedDevice)
-
-            for device in aggregatedDevices where audio.isOutputDevice(deviceID: device) {
-                return audio.getDeviceVolume(deviceID: device).max()
-            }
-        } else {
-            return audio.getDeviceVolume(deviceID: selectedDevice).max()
-        }
-
-        return nil
+        return readDeviceVolumeFromHAL()
     }
 
     func setSelectedDeviceVolume(volume: Float) {
+        guard selectedDevice != nil else {
+            return
+        }
+        // Capture the latest target so any still-scheduled work item drops through — and any
+        // intervening `getSelectedDeviceVolume` sees the new value.
+        pendingTargetVolume = volume
+        pendingApplyItem?.cancel()
+        let work = DispatchWorkItem { [weak self] in
+            self?.flushPendingVolumeApply()
+        }
+        pendingApplyItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.halApplyDelay, execute: work)
+    }
+
+    func toggleMute() {
+        // Mute/unmute takes precedence over any pending volume write — otherwise a queued
+        // volume.apply would fire after the mute and overwrite the mute flag via
+        // setSelectedDeviceVolume's auto-mute branch.
+        let intendedVolume = getSelectedDeviceVolume()
+        cancelPendingVolumeApply()
+
+        if isSelectedDeviceMuted() {
+            setSelectedDeviceMute(isMute: false)
+            // Some drivers zero the volume scalar while muted. If we come back to an
+            // effectively-zero scalar after unmuting, restore the pre-mute volume so the
+            // user doesn't appear stuck at 0% audio. If the pre-mute volume was itself
+            // below the auto-mute lowerbound (user deliberately muted silence), leave the
+            // scalar alone — re-applying 0 here would re-trigger the auto-mute branch in
+            // applyVolumeToHAL and undo the unmute.
+            if let pre = volumeBeforeMute,
+               pre >= Constants.muteVolumeLowerbound,
+               let current = readDeviceVolumeFromHAL(),
+               current < Constants.muteVolumeLowerbound {
+                applyVolumeToHAL(pre)
+            }
+            volumeBeforeMute = nil
+        } else {
+            volumeBeforeMute = intendedVolume
+            setSelectedDeviceMute(isMute: true)
+        }
+    }
+
+    var isMuted: Bool {
+        return isSelectedDeviceMuted()
+    }
+
+    // MARK: Private
+
+    // Actual HAL writer — called from the debounced work item and from `toggleMute`'s
+    // unmute-restore path. Not exposed.
+    private func applyVolumeToHAL(_ volume: Float) {
         guard let selectedDevice = selectedDevice else {
             return
         }
@@ -122,6 +177,41 @@ final class AudioManagerImpl: AudioManager {
             )
             audio.setDeviceMute(deviceID: selectedDevice, isMute: isMute)
         }
+    }
+
+    private func flushPendingVolumeApply() {
+        guard let target = pendingTargetVolume else {
+            return
+        }
+        pendingTargetVolume = nil
+        pendingApplyItem = nil
+        applyVolumeToHAL(target)
+    }
+
+    private func cancelPendingVolumeApply() {
+        pendingApplyItem?.cancel()
+        pendingApplyItem = nil
+        pendingTargetVolume = nil
+    }
+
+    // Unconditional HAL read — bypasses the pending-target cache. Used by mute/unmute so the
+    // driver-zeroed-scalar check sees the actual device state, not a cached intent.
+    private func readDeviceVolumeFromHAL() -> Float? {
+        guard let selectedDevice = selectedDevice else {
+            return nil
+        }
+
+        if audio.isAggregateDevice(deviceID: selectedDevice) {
+            let aggregatedDevices = audio.getAggregateDeviceSubDeviceList(deviceID: selectedDevice)
+
+            for device in aggregatedDevices where audio.isOutputDevice(deviceID: device) {
+                return audio.getDeviceVolume(deviceID: device).max()
+            }
+        } else {
+            return audio.getDeviceVolume(deviceID: selectedDevice).max()
+        }
+
+        return nil
     }
 
     private func setSelectedDeviceMute(isMute: Bool) {
@@ -158,32 +248,6 @@ final class AudioManagerImpl: AudioManager {
         }
     }
 
-    func toggleMute() {
-        if isSelectedDeviceMuted() {
-            setSelectedDeviceMute(isMute: false)
-            // Some drivers zero the volume scalar while muted. If we come back to an
-            // effectively-zero scalar after unmuting, restore the pre-mute volume so the
-            // user doesn't appear stuck at 0% audio. If the pre-mute volume was itself
-            // below the auto-mute lowerbound (user deliberately muted silence), leave the
-            // scalar alone — re-applying 0 here would re-trigger the auto-mute branch in
-            // setSelectedDeviceVolume and undo the unmute.
-            if let pre = volumeBeforeMute,
-               pre >= Constants.muteVolumeLowerbound,
-               let current = getSelectedDeviceVolume(),
-               current < Constants.muteVolumeLowerbound {
-                setSelectedDeviceVolume(volume: pre)
-            }
-            volumeBeforeMute = nil
-        } else {
-            volumeBeforeMute = getSelectedDeviceVolume()
-            setSelectedDeviceMute(isMute: true)
-        }
-    }
-
-    var isMuted: Bool {
-        return isSelectedDeviceMuted()
-    }
-
     private func printDevices() {
         guard let devices = devices else {
             return
@@ -208,6 +272,7 @@ final class AudioManagerImpl: AudioManager {
         // If the currently selected device was removed, fall back to whatever the system default
         // points at now — hotkeys and the slider keep working instead of silently no-oping.
         if let current = selectedDevice, devices?[current] == nil {
+            cancelPendingVolumeApply()
             let fallback = audio.getDefaultOutputDevice()
             selectedDevice = (fallback != kAudioDeviceUnknown) ? fallback : nil
         }
