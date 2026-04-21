@@ -49,8 +49,9 @@ final class StatusBarControllerImpl: StatusBarController {
     func createMenu() {
         if let button = statusItem.button {
             button.image = Images.volumeImage1
+            button.setAccessibilityLabel(Strings.volume)
         }
-        
+
         let menu = NSMenu()
         menu.autoenablesItems = false
         
@@ -77,13 +78,13 @@ final class StatusBarControllerImpl: StatusBarController {
     }
     
     func changeStatusItemImage(value: Float) {
-        if value < 1 {
+        if value <= 1 {
             statusItem.button?.image = Images.volumeImage1
-        } else if value > 1 && value <= 100 / 3 {
+        } else if value <= 100 / 3 {
             statusItem.button?.image = Images.volumeImage2
-        } else if value > 100 / 3 && value <= 100 / 3 * 2 {
+        } else if value <= 100 / 3 * 2 {
             statusItem.button?.image = Images.volumeImage3
-        } else if value > 100 / 3 * 2 && value <= 100 {
+        } else {
             statusItem.button?.image = Images.volumeImage4
         }
     }
@@ -140,8 +141,11 @@ final class StatusBarControllerImpl: StatusBarController {
         }
         
         let defaultDevice = audioManager.getDefaultOutputDevice()
-        
-        for device in devices {
+        let sortedDevices = devices.sorted { lhs, rhs in
+            lhs.value.localizedCaseInsensitiveCompare(rhs.value) == .orderedAscending
+        }
+
+        for device in sortedDevices {
             let item = NSMenuItem(
                 title: truncate(device.value, length: Constants.optionMaxLength),
                 action: #selector(menuItemAction),
@@ -149,12 +153,12 @@ final class StatusBarControllerImpl: StatusBarController {
             )
             item.target = self
             item.tag = Int(device.key)
-            
+
             if device.key == defaultDevice {
                 item.state = .on
                 selectDevice(device: defaultDevice)
             }
-            
+
             menu.addItem(item)
         }
     }
