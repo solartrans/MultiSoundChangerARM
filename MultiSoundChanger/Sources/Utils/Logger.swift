@@ -99,16 +99,33 @@ enum Logger {
     }
 
     private static func appendToFile(url: URL, content: String) throws {
-        if FileManager.default.fileExists(atPath: url.path) {
-            let fileHandle = try FileHandle(forWritingTo: url)
-            guard let data = content.data(using: .utf8) else {
-                throw LoggerError.dataError
+        guard let data = content.data(using: .utf8) else {
+            throw LoggerError.dataError
+        }
+        // Raw POSIX open with O_NOFOLLOW defends against a local attacker planting a symlink
+        // at our log path (~/Library/Caches/<bundleID>/app.log) pointing at e.g. ~/.ssh/id_rsa,
+        // which a naive FileHandle(forWritingTo:) would follow and end up appending log lines
+        // into the symlink's target. O_NOFOLLOW makes open() fail with ELOOP instead.
+        // Mode 0600 on creation keeps the log file user-only.
+        let flags = O_WRONLY | O_APPEND | O_CREAT | O_NOFOLLOW
+        let fd = url.path.withCString { path in
+            Darwin.open(path, flags, mode_t(0o600))
+        }
+        guard fd >= 0 else {
+            let reason = String(cString: strerror(errno))
+            throw LoggerError.fileError("open(\(url.path)) failed: \(reason) (errno=\(errno))")
+        }
+        defer { Darwin.close(fd) }
+
+        let written = data.withUnsafeBytes { buffer -> Int in
+            guard let base = buffer.baseAddress else {
+                return -1
             }
-            fileHandle.seekToEndOfFile()
-            fileHandle.write(data)
-            fileHandle.closeFile()
-        } else {
-            try content.write(to: url, atomically: true, encoding: .utf8)
+            return Darwin.write(fd, base, buffer.count)
+        }
+        if written < 0 {
+            let reason = String(cString: strerror(errno))
+            throw LoggerError.fileError("write(\(url.path)) failed: \(reason) (errno=\(errno))")
         }
     }
 

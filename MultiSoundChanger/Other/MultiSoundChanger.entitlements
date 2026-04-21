@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!--
+	  Intentionally empty. MultiSoundChanger is a pure Swift/AppKit menu-bar app:
+	    • No App Sandbox (CGEventTap via MediaKeyTap is incompatible with sandbox).
+	    • No JIT, no dylib injection, no unsigned-plugin loading.
+	    • No outgoing Apple Events (NSWorkspace.openApplication and `x-apple.systempreferences:`
+	      URL open do not require the `com.apple.security.automation.apple-events` entitlement).
+	    • No debugger attach, no DYLD env overrides.
+	  If a future feature requires a Hardened Runtime exception (e.g., Apple Events to other
+	  apps, or library validation disable for a third-party plug-in), add only the specific
+	  entitlement needed — never a blanket exception.
+	-->
+</dict>
+</plist>

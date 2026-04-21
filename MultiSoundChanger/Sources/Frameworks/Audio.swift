@@ -358,7 +358,19 @@ final class AudioImpl: Audio {
             return ""
         }
 
-        return name.takeRetainedValue() as String
+        let cfstr = name.takeRetainedValue()
+        // Cap the bridged Swift-String length at something far beyond any real device name
+        // (legitimate names are a few tens of chars; 256 UTF-16 units is extremely generous).
+        // A malicious third-party HAL plugin could otherwise return an arbitrarily large
+        // CFString here and force us to pay a large-bridge + large-Swift-String allocation on
+        // every device-list refresh.
+        let length = CFStringGetLength(cfstr)
+        let maxChars: CFIndex = 256
+        if length > maxChars {
+            let truncated = CFStringCreateWithSubstring(kCFAllocatorDefault, cfstr, CFRange(location: 0, length: maxChars))
+            return (truncated as String?) ?? ""
+        }
+        return cfstr as String
     }
 
     private func getAllDevices() -> [AudioDeviceID] {
