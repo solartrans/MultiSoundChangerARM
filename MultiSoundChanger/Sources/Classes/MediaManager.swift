@@ -36,9 +36,10 @@ final class MediaManagerImpl: MediaManager {
     }
     
     // MARK: Public
-    
+
     func listenMediaKeyTaps() {
         observeMediaKeyOnAccessibiltiyApiChange()
+        acquirePrivileges()
         startMediaKeyTap()
     }
     
@@ -83,14 +84,12 @@ final class MediaManagerImpl: MediaManager {
     }
     
     private func startMediaKeyTap() {
-        acquirePrivileges()
-        
         let keys: [MediaKey] = [
             .volumeUp,
             .volumeDown,
             .mute
         ]
-        
+
         mediaKeyTap?.stop()
         mediaKeyTap = MediaKeyTap(delegate: self, for: keys, observeBuiltIn: true)
         mediaKeyTap?.start()
