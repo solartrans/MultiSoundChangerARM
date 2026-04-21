@@ -32,6 +32,7 @@ final class AudioManagerImpl: AudioManager {
     
     init() {
         devices = audio.getOutputDevices()
+        selectedDevice = audio.getDefaultOutputDevice()
         printDevices()
     }
     
