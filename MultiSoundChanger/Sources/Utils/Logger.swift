@@ -20,9 +20,21 @@ enum Logger {
         case newLine = "\n"
     }
 
-    private enum LoggerError: Error {
+    private enum LoggerError: Error, LocalizedError {
         case fileError(String)
         case dataError
+
+        // Surface our message via `localizedDescription` so the outer `filePrint` catch
+        // (which calls `error.localizedDescription`) actually sees the errno/path telemetry
+        // instead of Cocoa's generic "The operation couldn't be completed." wrapper.
+        var errorDescription: String? {
+            switch self {
+            case .fileError(let message):
+                return message
+            case .dataError:
+                return "Failed to encode log message as UTF-8"
+            }
+        }
     }
 
     private static var isLogFileRemoved = false
@@ -117,15 +129,31 @@ enum Logger {
         }
         defer { Darwin.close(fd) }
 
-        let written = data.withUnsafeBytes { buffer -> Int in
+        // Loop until the whole buffer is flushed. A single `Darwin.write` can return fewer
+        // bytes than requested on EINTR, disk pressure, or signal interruption — the old
+        // single-shot call silently dropped the tail in those cases.
+        let writeError: String? = data.withUnsafeBytes { buffer -> String? in
             guard let base = buffer.baseAddress else {
-                return -1
+                return "empty write buffer"
             }
-            return Darwin.write(fd, base, buffer.count)
+            var offset = 0
+            while offset < buffer.count {
+                let written = Darwin.write(fd, base.advanced(by: offset), buffer.count - offset)
+                if written < 0 {
+                    if errno == EINTR {
+                        continue
+                    }
+                    return "\(String(cString: strerror(errno))) (errno=\(errno)) after \(offset)/\(buffer.count) bytes"
+                }
+                if written == 0 {
+                    return "write returned 0 after \(offset)/\(buffer.count) bytes"
+                }
+                offset += written
+            }
+            return nil
         }
-        if written < 0 {
-            let reason = String(cString: strerror(errno))
-            throw LoggerError.fileError("write(\(url.path)) failed: \(reason) (errno=\(errno))")
+        if let writeError = writeError {
+            throw LoggerError.fileError("write(\(url.path)) failed: \(writeError)")
         }
     }
 

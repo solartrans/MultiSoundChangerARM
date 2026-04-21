@@ -367,7 +367,15 @@ final class AudioImpl: Audio {
         let length = CFStringGetLength(cfstr)
         let maxChars: CFIndex = 256
         if length > maxChars {
-            let truncated = CFStringCreateWithSubstring(kCFAllocatorDefault, cfstr, CFRange(location: 0, length: maxChars))
+            // If the last UTF-16 unit at the cut point is a high surrogate (range
+            // 0xD800...0xDBFF), backing off by one avoids leaving a dangling lead surrogate
+            // that bridges to Swift as U+FFFD.
+            var cut = maxChars
+            let lastChar = CFStringGetCharacterAtIndex(cfstr, cut - 1)
+            if (0xD800...0xDBFF).contains(lastChar) {
+                cut -= 1
+            }
+            let truncated = CFStringCreateWithSubstring(kCFAllocatorDefault, cfstr, CFRange(location: 0, length: cut))
             return (truncated as String?) ?? ""
         }
         return cfstr as String
