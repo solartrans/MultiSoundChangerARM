@@ -163,8 +163,8 @@ The new native OSD implementation provides:
 
 ## Compatibility Notes
 
-- **Minimum macOS Version**: 10.10 (Yosemite) - unchanged
-- **Recommended macOS Version**: 11.0 or later for full ARM64 support
+- **Minimum macOS Version**: 11.0 (Big Sur) — raised from 10.10 to enable ARM64 support
+- **Recommended macOS Version**: 11.0 or later
 - **Code Signing**: Currently set to manual with no identity ("-")
 - **Deployment**: Works on both Intel and Apple Silicon Macs
 

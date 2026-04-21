@@ -11,34 +11,19 @@ import Foundation
 // OSD Graphics enum to match the original framework
 @objc
 enum OSDGraphic: Int {
-    case backlight = 1
     case speaker = 3
     case speakerMuted = 4
-    case eject = 6
-    case noWiFi = 9
-    case keyboardBacklightMeter = 11
-    case keyboardBacklightDisabledMeter = 12
-    case keyboardBacklightNotConnected = 13
-    case keyboardBacklightDisabledNotConnected = 14
-    case macProOpen = 15
-    case hotspot = 19
-    case sleep = 20
 }
 
-// Native OSD Manager implementation using NSWindow
+// Native OSD Manager implementation using a single reusable NSWindow
 @objc
 class OSDManager: NSObject {
-    private static var shared: OSDManager?
+    private static let instance = OSDManager()
     private var osdWindow: OSDWindow?
 
     @objc
     static func sharedManager() -> OSDManager {
-        if let existingManager = shared {
-            return existingManager
-        }
-        let newManager = OSDManager()
-        shared = newManager
-        return newManager
+        return instance
     }
 
     private override init() {
@@ -73,61 +58,59 @@ class OSDManager: NSObject {
         totalChiclets: Int,
         fadeDelay: TimeInterval
     ) {
-        // Cleanup existing window synchronously
-        osdWindow?.cleanup()
-        osdWindow = nil
-
-        // Get the screen for the display
-        let screen = NSScreen.screens.first { screen in
-            guard let screenNumber = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else {
-                return false
-            }
-            return screenNumber == displayID
-        } ?? NSScreen.main
-
-        guard let targetScreen = screen else {
+        guard let targetScreen = resolveScreen(for: displayID) else {
+            Logger.warning("OSD: no NSScreen available, skipping show")
             return
         }
 
-        // Create and show OSD window immediately
-        let window = OSDWindow(
+        let window: OSDWindow
+        if let existing = osdWindow {
+            window = existing
+        } else {
+            window = OSDWindow()
+            osdWindow = window
+        }
+
+        window.update(
             graphic: graphic,
             filledChiclets: filledChiclets,
             totalChiclets: totalChiclets,
             screen: targetScreen
         )
-
-        // Store strong reference
-        osdWindow = window
-
-        // Show immediately (no async)
         window.show(fadeAfter: fadeDelay)
+    }
+
+    private func resolveScreen(for displayID: CGDirectDisplayID) -> NSScreen? {
+        let matched = NSScreen.screens.first { screen in
+            guard let screenNumber = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID else {
+                return false
+            }
+            return screenNumber == displayID
+        }
+
+        if matched == nil {
+            Logger.warning("OSD: no NSScreen matches displayID=\(displayID); using NSScreen.main")
+        }
+
+        return matched ?? NSScreen.main
     }
 }
 
-// Custom window to display OSD
-private class OSDWindow: NSWindow {
-    private let contentPanel: NSView
+// Reusable OSD window — created once and updated in place for each volume event.
+private final class OSDWindow: NSWindow {
+    private static let windowSize = NSSize(width: 200, height: 200)
+
+    private let contentPanel: OSDContentView
     private var fadeTimer: Timer?
 
-    init(graphic: OSDGraphic, filledChiclets: Int, totalChiclets: Int, screen: NSScreen) {
-        // Window dimensions
-        let windowWidth: CGFloat = 200
-        let windowHeight: CGFloat = 200
-
-        // Center on screen
-        let screenFrame = screen.frame
-        let xPos = screenFrame.midX - windowWidth / 2
-        let yPos = screenFrame.midY + screenFrame.height / 4 - windowHeight / 2
-
-        let rect = NSRect(x: xPos, y: yPos, width: windowWidth, height: windowHeight)
-
-        // Create content view
+    init() {
         contentPanel = OSDContentView(
-            graphic: graphic,
-            filledChiclets: filledChiclets,
-            totalChiclets: totalChiclets
+            graphic: .speaker,
+            filledChiclets: 0,
+            totalChiclets: Constants.chicletsCount
         )
+
+        let rect = NSRect(origin: .zero, size: OSDWindow.windowSize)
 
         super.init(
             contentRect: rect,
@@ -136,25 +119,40 @@ private class OSDWindow: NSWindow {
             defer: false
         )
 
-        // Window configuration
         self.isOpaque = false
         self.backgroundColor = .clear
         self.level = .statusBar
         self.ignoresMouseEvents = true
         self.hasShadow = false
-        self.isReleasedWhenClosed = false  // Prevent automatic deallocation
+        self.isReleasedWhenClosed = false
         self.contentView = contentPanel
         self.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle]
         self.animationBehavior = .utilityWindow
-
-        // Position on the correct screen
-        if let currentScreen = NSScreen.screens.first(where: { $0 == screen }) {
-            self.setFrameOrigin(NSPoint(x: xPos, y: yPos))
-        }
     }
 
     deinit {
         cleanup()
+    }
+
+    func update(graphic: OSDGraphic, filledChiclets: Int, totalChiclets: Int, screen: NSScreen) {
+        contentPanel.update(
+            graphic: graphic,
+            filledChiclets: filledChiclets,
+            totalChiclets: totalChiclets
+        )
+        repositionOn(screen: screen)
+    }
+
+    func show(fadeAfter delay: TimeInterval) {
+        fadeTimer?.invalidate()
+        fadeTimer = nil
+
+        self.alphaValue = 1.0
+        self.orderFrontRegardless()
+
+        fadeTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
+            self?.fadeOut()
+        }
     }
 
     func cleanup() {
@@ -163,40 +161,32 @@ private class OSDWindow: NSWindow {
         self.orderOut(nil)
     }
 
-    func show(fadeAfter delay: TimeInterval) {
-        // Cancel any existing timer
-        fadeTimer?.invalidate()
-        fadeTimer = nil
-
-        // Show window immediately without animation
-        self.alphaValue = 1.0
-        self.makeKeyAndOrderFront(nil)
-
-        // Schedule fade out (simplified)
-        fadeTimer = Timer.scheduledTimer(withTimeInterval: delay, repeats: false) { [weak self] _ in
-            self?.fadeOut()
-        }
+    private func repositionOn(screen: NSScreen) {
+        let size = OSDWindow.windowSize
+        let frame = screen.frame
+        let xPos = frame.midX - size.width / 2
+        let yPos = frame.midY + frame.height / 4 - size.height / 2
+        self.setFrameOrigin(NSPoint(x: xPos, y: yPos))
     }
 
     private func fadeOut() {
         fadeTimer?.invalidate()
         fadeTimer = nil
 
-        // Simple fade out without complex animations
-        self.animator().alphaValue = 0
-
-        // Close after a brief delay for fade
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+        NSAnimationContext.runAnimationGroup({ context in
+            context.duration = 0.3
+            self.animator().alphaValue = 0
+        }, completionHandler: { [weak self] in
             self?.orderOut(nil)
-        }
+        })
     }
 }
 
-// Content view that draws the OSD
-private class OSDContentView: NSView {
-    private let graphic: OSDGraphic
-    private let filledChiclets: Int
-    private let totalChiclets: Int
+// Content view that draws the OSD. Values are mutable so the parent window can be reused.
+private final class OSDContentView: NSView {
+    private var graphic: OSDGraphic
+    private var filledChiclets: Int
+    private var totalChiclets: Int
 
     init(graphic: OSDGraphic, filledChiclets: Int, totalChiclets: Int) {
         self.graphic = graphic
@@ -210,22 +200,23 @@ private class OSDContentView: NSView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    func update(graphic: OSDGraphic, filledChiclets: Int, totalChiclets: Int) {
+        self.graphic = graphic
+        self.filledChiclets = filledChiclets
+        self.totalChiclets = totalChiclets
+        self.needsDisplay = true
+    }
+
     override func draw(_ dirtyRect: NSRect) {
         super.draw(dirtyRect)
 
-        _ = NSGraphicsContext.current?.cgContext
-
-        // Draw background rounded rectangle
         let backgroundRect = bounds.insetBy(dx: 20, dy: 20)
         let backgroundPath = NSBezierPath(roundedRect: backgroundRect, xRadius: 20, yRadius: 20)
 
         NSColor.black.withAlphaComponent(0.8).setFill()
         backgroundPath.fill()
 
-        // Draw icon
         drawIcon(in: backgroundRect)
-
-        // Draw chiclets (volume bars)
         drawChiclets(in: backgroundRect)
     }
 
@@ -240,13 +231,10 @@ private class OSDContentView: NSView {
 
         NSColor.white.setFill()
 
-        // Draw speaker icon (simplified)
         if graphic == .speakerMuted {
-            // Draw muted speaker with X
             drawSpeakerShape(in: iconRect)
             drawMuteX(in: iconRect)
         } else {
-            // Draw normal speaker
             drawSpeakerShape(in: iconRect)
             drawSoundWaves(in: iconRect)
         }
@@ -255,7 +243,6 @@ private class OSDContentView: NSView {
     private func drawSpeakerShape(in rect: NSRect) {
         let path = NSBezierPath()
 
-        // Speaker cone (simplified trapezoid shape)
         let coneRect = NSRect(
             x: rect.minX + rect.width * 0.2,
             y: rect.minY + rect.height * 0.3,
