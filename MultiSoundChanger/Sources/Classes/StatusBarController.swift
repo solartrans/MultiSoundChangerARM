@@ -235,7 +235,7 @@ final class StatusBarControllerImpl: NSObject, StatusBarController {
     // System-initiated or startup-discovered device: update the app's selected device and UI
     // without re-writing the system default, which would refire the default-output listener.
     private func adoptDevice(_ device: AudioDeviceID) {
-        audioManager.followSelectedDevice(deviceID: device)
+        audioManager.adoptSelectedDevice(deviceID: device)
         refreshUIForSelectedDevice()
     }
 
@@ -271,7 +271,7 @@ final class StatusBarControllerImpl: NSObject, StatusBarController {
 
     @objc
     private func menuAudioSetupAction() {
-        Runner.launchApplication(bundleIndentifier: Constants.AppBundleIdentifier.audioDevices, options: .default)
+        Runner.launchApplication(bundleIdentifier: Constants.AppBundleIdentifier.audioDevices, options: .default)
     }
 
     @objc

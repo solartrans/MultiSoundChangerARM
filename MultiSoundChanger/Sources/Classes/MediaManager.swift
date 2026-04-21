@@ -38,7 +38,7 @@ final class MediaManagerImpl: MediaManager {
     // MARK: Public
 
     func listenMediaKeyTaps() {
-        observeMediaKeyOnAccessibiltiyApiChange()
+        observeMediaKeyOnAccessibilityApiChange()
         acquirePrivileges()
         startMediaKeyTap()
     }
@@ -95,7 +95,7 @@ final class MediaManagerImpl: MediaManager {
         mediaKeyTap?.start()
     }
 
-    private func observeMediaKeyOnAccessibiltiyApiChange() {
+    private func observeMediaKeyOnAccessibilityApiChange() {
         let notification = NSNotification.Name(rawValue: Constants.Notifications.accessibility)
 
         DistributedNotificationCenter.default().addObserver(

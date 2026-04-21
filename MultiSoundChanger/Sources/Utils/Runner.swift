@@ -29,9 +29,9 @@ enum Runner {
         return output
     }
 
-    static func launchApplication(bundleIndentifier: String, options: NSWorkspace.LaunchOptions) {
+    static func launchApplication(bundleIdentifier: String, options: NSWorkspace.LaunchOptions) {
         NSWorkspace.shared.launchApplication(
-            withBundleIdentifier: bundleIndentifier,
+            withBundleIdentifier: bundleIdentifier,
             options: options,
             additionalEventParamDescriptor: nil,
             launchIdentifier: nil

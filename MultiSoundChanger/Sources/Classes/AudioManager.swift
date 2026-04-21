@@ -26,7 +26,7 @@ protocol AudioManager: AnyObject {
     // Update the app's selected device to track an external default-output change (e.g. the user
     // switched output in System Settings) without round-tripping through setOutputDevice — which
     // would refire the default-output listener and risk a feedback loop.
-    func followSelectedDevice(deviceID: AudioDeviceID)
+    func adoptSelectedDevice(deviceID: AudioDeviceID)
 
     var isMuted: Bool { get }
     var delegate: AudioManagerDelegate? { get set }
@@ -71,7 +71,7 @@ final class AudioManagerImpl: AudioManager {
         Logger.debug(Constants.InnerMessages.selectDevice(deviceID: String(deviceID)))
     }
 
-    func followSelectedDevice(deviceID: AudioDeviceID) {
+    func adoptSelectedDevice(deviceID: AudioDeviceID) {
         selectedDevice = deviceID
         Logger.debug(Constants.InnerMessages.selectDevice(deviceID: String(deviceID)))
     }
