@@ -183,11 +183,18 @@ enum Logger {
         return string + Symbol.newLine.rawValue
     }
 
-    private static func getLogDate() -> String {
-        let date = Date()
+    // Cached — DateFormatter construction is ~orders of magnitude more expensive than
+    // `.string(from:)`, and `getLogDate()` runs on every log line. The formatter itself is
+    // thread-safe for reads per Apple's docs, and we only ever read-call `.string(from:)` on it
+    // after initialization.
+    private static let logDateFormatter: DateFormatter = {
         let formatter = DateFormatter()
         formatter.dateStyle = .short
         formatter.timeStyle = .medium
-        return formatter.string(from: date)
+        return formatter
+    }()
+
+    private static func getLogDate() -> String {
+        return logDateFormatter.string(from: Date())
     }
 }
