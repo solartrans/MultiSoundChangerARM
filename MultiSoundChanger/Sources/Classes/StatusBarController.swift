@@ -266,7 +266,13 @@ final class StatusBarControllerImpl: NSObject, StatusBarController {
 
     @objc
     private func menuSoundPreferencesAction() {
-        Runner.shell("open -b \(Constants.AppBundleIdentifier.systemPreferences) \(Constants.SystemPreferencesPane.sound)")
+        // Open the Sound pane via its documented `x-apple.systempreferences:` URL rather than
+        // shelling out to `open -b`. No subprocess, no shell interpretation — LaunchServices
+        // picks the right app (System Settings on Ventura+, System Preferences before that).
+        guard let url = URL(string: Constants.SystemSettingsURL.sound) else {
+            return
+        }
+        NSWorkspace.shared.open(url)
     }
 
     @objc

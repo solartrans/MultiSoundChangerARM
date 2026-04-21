@@ -15,12 +15,14 @@ enum Constants {
     static let logFilename = "app.log"
 
     enum AppBundleIdentifier {
-        static let systemPreferences = "com.apple.systempreferences"
         static let audioDevices = "com.apple.audio.AudioMIDISetup"
     }
 
-    enum SystemPreferencesPane {
-        static let sound = "/System/Library/PreferencePanes/Sound.prefPane"
+    // x-apple.systempreferences: URL used to jump straight to the Sound pane in System Settings
+    // (modern macOS) or System Preferences (pre-Ventura). Replaces the previous shell-out via
+    // `open -b com.apple.systempreferences /System/Library/PreferencePanes/Sound.prefPane`.
+    enum SystemSettingsURL {
+        static let sound = "x-apple.systempreferences:com.apple.preference.sound"
     }
 
     enum Notifications {

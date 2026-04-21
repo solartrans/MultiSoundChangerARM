@@ -20,7 +20,11 @@ private let kAudioPropertyElement: AudioObjectPropertyElement = 0
 // the exact block pointer it registered.
 final class AudioListenerToken {
     fileprivate let objectID: AudioObjectID
-    fileprivate var address: AudioObjectPropertyAddress
+    // `let` so nothing can mutate the address between `addHardwareListener` and
+    // `removeListener` — the HAL matches the exact block/address pair that was registered,
+    // and a mutated address would silently orphan the listener. The removeListener path
+    // copies into a local `var` for the `inout` call.
+    fileprivate let address: AudioObjectPropertyAddress
     fileprivate let block: AudioObjectPropertyListenerBlock
 
     fileprivate init(objectID: AudioObjectID, address: AudioObjectPropertyAddress, block: @escaping AudioObjectPropertyListenerBlock) {
@@ -394,8 +398,12 @@ extension AudioImpl {
     }
 
     func removeListener(_ token: AudioListenerToken) {
+        // Copy the immutable stored address into a local `var` so we can pass it `inout` to
+        // `AudioObjectRemovePropertyListenerBlock`. The HAL reads the address fields to match
+        // the registered listener; it doesn't need to mutate them.
+        var address = token.address
         check(
-            AudioObjectRemovePropertyListenerBlock(token.objectID, &token.address, Self.listenerQueue, token.block),
+            AudioObjectRemovePropertyListenerBlock(token.objectID, &address, Self.listenerQueue, token.block),
             "removeListener"
         )
     }

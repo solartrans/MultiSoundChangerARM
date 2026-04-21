@@ -26,6 +26,12 @@ protocol MediaManager: AnyObject {
 final class MediaManagerImpl: MediaManager {
     private weak var delegate: MediaManagerDelegate?
     private var mediaKeyTap: MediaKeyTap?
+    // Debounce handle for `onAccessibilityNotification`. DistributedNotificationCenter is a
+    // system-wide bus — any local process can post `com.apple.accessibility.api`, which our
+    // handler responds to by tearing down and recreating the CGEventTap. Coalesce bursts
+    // so a flood of spoofed notifications can't force us into a restart loop.
+    private var accessibilityNotificationWork: DispatchWorkItem?
+    private static let accessibilityNotificationDebounce: TimeInterval = 0.5
 
     init(delegate: MediaManagerDelegate) {
         self.delegate = delegate
@@ -108,9 +114,14 @@ final class MediaManagerImpl: MediaManager {
 
     @objc
     private func onAccessibilityNotification(_ aNotification: Notification) {
-        DispatchQueue.main.async { [weak self] in
+        // DistributedNotificationCenter delivers on main; coalesce with a cancellable work
+        // item so a burst only results in one tap restart.
+        accessibilityNotificationWork?.cancel()
+        let work = DispatchWorkItem { [weak self] in
             self?.startMediaKeyTap()
         }
+        accessibilityNotificationWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.accessibilityNotificationDebounce, execute: work)
     }
 }
 

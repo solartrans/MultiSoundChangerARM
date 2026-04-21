@@ -4,10 +4,15 @@ target 'MultiSoundChanger' do
   # Comment the next line if you don't want to use dynamic frameworks
   use_frameworks!
 
-  pod 'SwiftLint', :inhibit_warnings => true
+  pod 'SwiftLint', '~> 0.51', :inhibit_warnings => true
   # MediaKeyTap's fork still uses the deprecated `class` keyword for class-constrained
   # protocols and a few CFRelease-era patterns; inhibit the noise since it's third-party.
-  pod 'MediaKeyTap', :git => 'https://github.com/the0neyouseek/MediaKeyTap.git', :branch => 'master', :inhibit_warnings => true
+  # Pin to a specific commit rather than :branch => 'master' so a compromise of the
+  # the0neyouseek fork can't silently land new code in our build on the next `pod install`.
+  pod 'MediaKeyTap',
+    :git => 'https://github.com/the0neyouseek/MediaKeyTap.git',
+    :commit => '22293b608bb9e7072960a2002d77ebbbdb3ba859',
+    :inhibit_warnings => true
 end
 
 post_install do |installer|

@@ -254,8 +254,19 @@ final class AudioManagerImpl: AudioManager {
         }
         Logger.debug(Constants.InnerMessages.outputDevices)
         for device in devices {
-            Logger.debug(Constants.InnerMessages.debugDevice(deviceID: String(device.key), deviceName: device.value))
+            // Sanitize the device name before logging: CoreAudio returns whatever string the
+            // device reports, and a device whose name contains `\n` / `\r` / `\t` could
+            // otherwise inject fake log lines and confuse downstream log readers.
+            let sanitized = Self.sanitizedForLog(device.value)
+            Logger.debug(Constants.InnerMessages.debugDevice(deviceID: String(device.key), deviceName: sanitized))
         }
+    }
+
+    private static func sanitizedForLog(_ string: String) -> String {
+        return string
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "\r", with: " ")
+            .replacingOccurrences(of: "\t", with: " ")
     }
 
     private func registerListeners() {
