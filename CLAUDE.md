@@ -58,6 +58,12 @@ The on-disk `OSD.framework/` directory is a leftover and is no longer referenced
 
 Volume is quantized to `Constants.chicletsCount` (16) steps so hardware key presses align with OSD chiclets.
 
+## Workflow
+
+- **Active branch**: `claude/rebuild-x86-app-011CV4gXVczxQsxNuHeA9X9o` (targets PR #39 on `rlxone/MultiSoundChanger`).
+- **After every round of changes, commit and push to that branch.** Don't batch rounds locally — push after each cohesive commit or group of commits so the PR reflects progress and the reviewer sees the evolving state. The push target is `origin` (`solartrans/MultiSoundChangerARM`); the PR against upstream (`rlxone/MultiSoundChanger`) updates automatically.
+- If `git push` fails from a non-interactive shell (no cached credential, no SSH key in `~/.ssh`), ask the user to run it themselves via the `! git push origin claude/rebuild-x86-app-011CV4gXVczxQsxNuHeA9X9o` escape-hatch in the prompt rather than skipping the push. Never silently leave commits unpushed.
+
 ## Conventions
 
 - Swift-only source lives under `MultiSoundChanger/Sources/`; non-code assets and `Constants.swift` under `MultiSoundChanger/Other/`.
