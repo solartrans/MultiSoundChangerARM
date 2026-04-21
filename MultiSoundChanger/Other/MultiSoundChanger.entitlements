@@ -3,15 +3,32 @@
 <plist version="1.0">
 <dict>
 	<!--
-	  Intentionally empty. MultiSoundChanger is a pure Swift/AppKit menu-bar app:
-	    • No App Sandbox (CGEventTap via MediaKeyTap is incompatible with sandbox).
-	    • No JIT, no dylib injection, no unsigned-plugin loading.
-	    • No outgoing Apple Events (NSWorkspace.openApplication and `x-apple.systempreferences:`
-	      URL open do not require the `com.apple.security.automation.apple-events` entitlement).
-	    • No debugger attach, no DYLD env overrides.
-	  If a future feature requires a Hardened Runtime exception (e.g., Apple Events to other
-	  apps, or library validation disable for a third-party plug-in), add only the specific
-	  entitlement needed — never a blanket exception.
+	  MultiSoundChanger is a pure Swift/AppKit menu-bar app. The only Hardened-Runtime
+	  exception we need is `com.apple.security.cs.disable-library-validation`, because:
+
+	    • CocoaPods' `use_frameworks!` embeds MediaKeyTap into the .app bundle as a dynamic
+	      framework.
+	    • We sign ad-hoc (`CODE_SIGN_IDENTITY = "-"`) for open-source source-built use.
+	    • Hardened Runtime's default library validation rejects embedded dylibs unless they
+	      share a Team ID with the main binary — ad-hoc signatures have no team, so the
+	      archived .app refuses to launch embedded frameworks (test builds from Xcode work
+	      because Launch Services is more permissive for direct-run-from-DerivedData).
+
+	  Narrowly-scoped exception: only affects which dylibs can load into this process. Real
+	  risk requires the attacker to already have write access to the .app bundle, at which
+	  point they have worse options than dylib injection.
+
+	  NOT adding:
+	    • App Sandbox — CGEventTap (via MediaKeyTap) requires host access.
+	    • `com.apple.security.cs.allow-jit` / `allow-unsigned-executable-memory` — no JIT.
+	    • `com.apple.security.automation.apple-events` — NSWorkspace uses LaunchServices.
+	    • `com.apple.security.cs.allow-dyld-environment-variables` — we don't use DYLD vars.
+
+	  If shipping via Developer ID + notarization later, this exception can be REMOVED if
+	  all embedded frameworks get re-signed with the same Developer ID (which CocoaPods'
+	  standard xcconfig handles). But for source-built ad-hoc distribution, it stays.
 	-->
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
 </dict>
 </plist>
