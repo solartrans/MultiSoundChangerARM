@@ -26,6 +26,10 @@ enum Logger {
     }
 
     private static var isLogFileRemoved = false
+    // Serialize and offload file I/O so per-keypress logging (AudioManager.selectDevice,
+    // ApplicationController.onMediaKeyTap) doesn't stall the main thread on FileManager /
+    // FileHandle syscalls.
+    private static let fileWriteQueue = DispatchQueue(label: "com.multisoundchanger.logger")
 
     private static var bundleIdentifier: String {
         guard let bundleIdentifier = Bundle.main.bundleIdentifier else {
@@ -58,10 +62,15 @@ enum Logger {
 
     private static func outAndFilePrint(symbol: DebugSymbol, string: String) {
         outPrint(symbol: symbol, string: string)
-        do {
-            try filePrint(symbol: symbol, string: string)
-        } catch let error {
-            outPrint(symbol: .error, string: error.localizedDescription)
+        fileWriteQueue.async {
+            do {
+                try filePrint(symbol: symbol, string: string)
+            } catch let error {
+                // Print the file error back on main so it surfaces alongside the stdout stream.
+                DispatchQueue.main.async {
+                    outPrint(symbol: .error, string: error.localizedDescription)
+                }
+            }
         }
     }
 

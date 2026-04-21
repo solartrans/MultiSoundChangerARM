@@ -359,21 +359,26 @@ final class AudioImpl: Audio {
     }
 
     private func getDeviceName(deviceID: AudioDeviceID) -> String {
-        var propertySize = UInt32(MemoryLayout<CFString>.size)
+        var propertySize = UInt32(MemoryLayout<Unmanaged<CFString>?>.size)
 
         var propertyAddress = AudioObjectPropertyAddress(
             mSelector: AudioObjectPropertySelector(kAudioDevicePropertyDeviceNameCFString),
             mScope: AudioObjectPropertyScope(kAudioObjectPropertyScopeGlobal),
             mElement: kAudioPropertyElement)
 
-        var result: CFString = "" as CFString
+        // CoreFoundation types (CFString here) must come back through `Unmanaged` — forming a raw
+        // pointer to a CFString-typed variable is undefined under ARC, which is what the
+        // "UnsafeMutableRawPointer to CFString" warning was flagging.
+        var name: Unmanaged<CFString>?
 
-        check(
-            AudioObjectGetPropertyData(deviceID, &propertyAddress, 0, nil, &propertySize, &result),
+        guard check(
+            AudioObjectGetPropertyData(deviceID, &propertyAddress, 0, nil, &propertySize, &name),
             "getDeviceName:GetPropertyData"
-        )
+        ), let name = name else {
+            return ""
+        }
 
-        return result as String
+        return name.takeRetainedValue() as String
     }
 
     private func getAllDevices() -> [AudioDeviceID] {

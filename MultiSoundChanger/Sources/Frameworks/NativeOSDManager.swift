@@ -39,14 +39,29 @@ class OSDManager: NSObject {
         totalChiclets: UInt32,
         locked: Bool
     ) {
-        DispatchQueue.main.async { [weak self] in
-            self?.displayOSD(
-                graphic: OSDGraphic(rawValue: Int(image)) ?? .speaker,
+        let graphic = OSDGraphic(rawValue: Int(image)) ?? .speaker
+        let fadeDelay = TimeInterval(msecUntilFade) / 1_000.0
+        // The media-key handler already runs on main, so invoking synchronously here avoids a
+        // full runloop tick of latency between the user pressing a volume key and the OSD
+        // appearing. Non-main callers still fall through to main.async.
+        if Thread.isMainThread {
+            displayOSD(
+                graphic: graphic,
                 displayID: displayID,
                 filledChiclets: Int(filledChiclets),
                 totalChiclets: Int(totalChiclets),
-                fadeDelay: TimeInterval(msecUntilFade) / 1_000.0
+                fadeDelay: fadeDelay
             )
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                self?.displayOSD(
+                    graphic: graphic,
+                    displayID: displayID,
+                    filledChiclets: Int(filledChiclets),
+                    totalChiclets: Int(totalChiclets),
+                    fadeDelay: fadeDelay
+                )
+            }
         }
     }
 
