@@ -241,7 +241,7 @@
 			dependencies = (
 			);
 			name = MultiSoundChanger;
-			productName = DynamicsIllusion;
+			productName = MultiSoundChanger;
 			productReference = 4743EFA71E91493B0032F5AA /* MultiSoundChanger.app */;
 			productType = "com.apple.product-type.application";
 		};

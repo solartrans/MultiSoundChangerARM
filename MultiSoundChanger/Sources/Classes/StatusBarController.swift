@@ -167,7 +167,7 @@ final class StatusBarControllerImpl: NSObject, StatusBarController {
             let item = NSMenuItem(
                 title: truncate(device.value, length: Constants.optionMaxLength),
                 action: #selector(menuItemAction),
-                keyEquivalent: String()
+                keyEquivalent: ""
             )
             item.target = self
             item.tag = Int(device.key)
@@ -193,7 +193,7 @@ final class StatusBarControllerImpl: NSObject, StatusBarController {
             return item
 
         case .slider:
-            let item = NSMenuItem(title: String(), action: nil, keyEquivalent: Constants.Keys.empty.rawValue)
+            let item = NSMenuItem(title: "", action: nil, keyEquivalent: Constants.Keys.empty.rawValue)
             item.view = volumeController.view
             return item
 
