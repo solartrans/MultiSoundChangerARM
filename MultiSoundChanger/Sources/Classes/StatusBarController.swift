@@ -271,7 +271,7 @@ final class StatusBarControllerImpl: NSObject, StatusBarController {
 
     @objc
     private func menuAudioSetupAction() {
-        Runner.launchApplication(bundleIdentifier: Constants.AppBundleIdentifier.audioDevices, options: .default)
+        Runner.launchApplication(bundleIdentifier: Constants.AppBundleIdentifier.audioDevices)
     }
 
     @objc
