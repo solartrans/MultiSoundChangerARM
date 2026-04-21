@@ -6,7 +6,6 @@
 //
 
 import Cocoa
-import Foundation
 
 // OSD Graphics enum to match the original framework
 @objc

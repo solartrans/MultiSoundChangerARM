@@ -7,7 +7,6 @@
 //
 
 import AudioToolbox
-import Cocoa
 import Foundation
 
 // `kAudioObjectPropertyElementMaster` was renamed to `kAudioObjectPropertyElementMain` in macOS 12;

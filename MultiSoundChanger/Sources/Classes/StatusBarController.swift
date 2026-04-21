@@ -135,14 +135,7 @@ final class StatusBarControllerImpl: NSObject, StatusBarController {
         for item in deviceMenuItems {
             item.state = (item.tag == intTag) ? .on : .off
         }
-        // Track the system default without round-tripping through setOutputDevice — that would
-        // refire the default-output listener and could recurse.
-        audioManager.followSelectedDevice(deviceID: defaultDevice)
-        if let volume = audioManager.getSelectedDeviceVolume() {
-            let correctedVolume = audioManager.isMuted ? 0 : volume * 100
-            volumeController.updateSliderVolume(volume: correctedVolume)
-            changeStatusItemImage(value: correctedVolume)
-        }
+        adoptDevice(defaultDevice)
     }
 
     private func populateDeviceList(in menu: NSMenu) {
@@ -181,7 +174,9 @@ final class StatusBarControllerImpl: NSObject, StatusBarController {
 
             if device.key == defaultDevice {
                 item.state = .on
-                selectDevice(device: defaultDevice)
+                // Adopt — don't re-set the system default to itself, which can refire the
+                // kAudioHardwarePropertyDefaultOutputDevice listener during startup.
+                adoptDevice(defaultDevice)
             }
 
             menu.insertItem(item, at: cursor)
@@ -231,8 +226,20 @@ final class StatusBarControllerImpl: NSObject, StatusBarController {
         }
     }
 
+    // User-initiated device selection: propagate to the system default so audio routes follow.
     private func selectDevice(device: AudioDeviceID) {
         audioManager.selectDevice(deviceID: device)
+        refreshUIForSelectedDevice()
+    }
+
+    // System-initiated or startup-discovered device: update the app's selected device and UI
+    // without re-writing the system default, which would refire the default-output listener.
+    private func adoptDevice(_ device: AudioDeviceID) {
+        audioManager.followSelectedDevice(deviceID: device)
+        refreshUIForSelectedDevice()
+    }
+
+    private func refreshUIForSelectedDevice() {
         guard let volume = audioManager.getSelectedDeviceVolume() else {
             return
         }
