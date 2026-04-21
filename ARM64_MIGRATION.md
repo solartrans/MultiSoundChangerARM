@@ -197,10 +197,11 @@ Or, to keep your branch but reset to the pre-migration parent:
 git reset --hard c767aba^
 ```
 
-Note: the on-disk `OSD.framework/` directory is a leftover from the
-pre-migration state. It is no longer referenced by `project.pbxproj`,
-`MultiSoundChanger-Bridging-Header.h`, or any source file, so it can be
-removed without affecting the build.
+Note: the on-disk `OSD.framework/` directory has already been removed
+from this branch (it was a leftover from the pre-migration state and
+was no longer referenced by `project.pbxproj`, the bridging header, or
+any source file). Rolling back to a pre-deletion commit will restore it
+alongside the rest of the tree.
 
 ## Questions or Issues?
 

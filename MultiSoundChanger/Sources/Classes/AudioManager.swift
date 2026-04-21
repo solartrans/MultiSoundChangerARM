@@ -24,6 +24,10 @@ protocol AudioManager: AnyObject {
     func setSelectedDeviceVolume(volume: Float)
     func isSelectedDeviceMuted() -> Bool
     func toggleMute()
+    // Update the app's selected device to track an external default-output change (e.g. the user
+    // switched output in System Settings) without round-tripping through setOutputDevice — which
+    // would refire the default-output listener and risk a feedback loop.
+    func followSelectedDevice(deviceID: AudioDeviceID)
 
     var isMuted: Bool { get }
     var delegate: AudioManagerDelegate? { get set }
@@ -41,7 +45,8 @@ final class AudioManagerImpl: AudioManager {
 
     init() {
         devices = audio.getOutputDevices()
-        selectedDevice = audio.getDefaultOutputDevice()
+        let defaultDevice = audio.getDefaultOutputDevice()
+        selectedDevice = (defaultDevice != kAudioDeviceUnknown) ? defaultDevice : nil
         printDevices()
         registerListeners()
     }
@@ -51,30 +56,35 @@ final class AudioManagerImpl: AudioManager {
             audio.removeListener(token)
         }
     }
-    
+
     func getDefaultOutputDevice() -> AudioDeviceID {
         return audio.getDefaultOutputDevice()
     }
-    
+
     func getOutputDevices() -> [AudioDeviceID: String]? {
         return devices
     }
-    
+
     func isAggregateDevice(deviceID: AudioDeviceID) -> Bool {
         return audio.isAggregateDevice(deviceID: deviceID)
     }
-    
+
     func selectDevice(deviceID: AudioDeviceID) {
         selectedDevice = deviceID
         audio.setOutputDevice(newDeviceID: deviceID)
         Logger.debug(Constants.InnerMessages.selectDevice(deviceID: String(deviceID)))
     }
-    
+
+    func followSelectedDevice(deviceID: AudioDeviceID) {
+        selectedDevice = deviceID
+        Logger.debug(Constants.InnerMessages.selectDevice(deviceID: String(deviceID)))
+    }
+
     func getSelectedDeviceVolume() -> Float? {
         guard let selectedDevice = selectedDevice else {
             return nil
         }
-        
+
         if audio.isAggregateDevice(deviceID: selectedDevice) {
             let aggregatedDevices = audio.getAggregateDeviceSubDeviceList(deviceID: selectedDevice)
 
@@ -84,10 +94,10 @@ final class AudioManagerImpl: AudioManager {
         } else {
             return audio.getDeviceVolume(deviceID: selectedDevice).max()
         }
-        
+
         return nil
     }
-    
+
     func setSelectedDeviceVolume(volume: Float) {
         guard let selectedDevice = selectedDevice else {
             return
@@ -117,15 +127,15 @@ final class AudioManagerImpl: AudioManager {
             audio.setDeviceMute(deviceID: selectedDevice, isMute: isMute)
         }
     }
-    
+
     func setSelectedDeviceMute(isMute: Bool) {
         guard let selectedDevice = selectedDevice else {
             return
         }
-        
+
         if audio.isAggregateDevice(deviceID: selectedDevice) {
             let aggregatedDevices = audio.getAggregateDeviceSubDeviceList(deviceID: selectedDevice)
-            
+
             for device in aggregatedDevices {
                 audio.setDeviceMute(deviceID: device, isMute: isMute)
             }
@@ -133,25 +143,25 @@ final class AudioManagerImpl: AudioManager {
             audio.setDeviceMute(deviceID: selectedDevice, isMute: isMute)
         }
     }
-    
+
     func isSelectedDeviceMuted() -> Bool {
         guard let selectedDevice = selectedDevice else {
             return false
         }
-        
+
         if audio.isAggregateDevice(deviceID: selectedDevice) {
             let aggregatedDevices = audio.getAggregateDeviceSubDeviceList(deviceID: selectedDevice)
-            
+
             guard let device = aggregatedDevices.first else {
                 return false
             }
-            
+
             return audio.isDeviceMuted(deviceID: device)
         } else {
             return audio.isDeviceMuted(deviceID: selectedDevice)
         }
     }
-    
+
     func toggleMute() {
         if isSelectedDeviceMuted() {
             setSelectedDeviceMute(isMute: false)
@@ -161,11 +171,11 @@ final class AudioManagerImpl: AudioManager {
             setSelectedDeviceMute(isMute: true)
         }
     }
-    
+
     var isMuted: Bool {
         return isSelectedDeviceMuted()
     }
-    
+
     private func printDevices() {
         guard let devices = devices else {
             return
@@ -177,12 +187,12 @@ final class AudioManagerImpl: AudioManager {
     }
 
     private func registerListeners() {
-        listenerTokens.append(
-            audio.addDevicesListener { [weak self] in self?.handleDevicesChanged() }
-        )
-        listenerTokens.append(
-            audio.addDefaultOutputDeviceListener { [weak self] in self?.handleDefaultOutputChanged() }
-        )
+        if let token = audio.addDevicesListener(onChange: { [weak self] in self?.handleDevicesChanged() }) {
+            listenerTokens.append(token)
+        }
+        if let token = audio.addDefaultOutputDeviceListener(onChange: { [weak self] in self?.handleDefaultOutputChanged() }) {
+            listenerTokens.append(token)
+        }
     }
 
     private func handleDevicesChanged() {
@@ -190,7 +200,8 @@ final class AudioManagerImpl: AudioManager {
         // If the currently selected device was removed, fall back to whatever the system default
         // points at now — hotkeys and the slider keep working instead of silently no-oping.
         if let current = selectedDevice, devices?[current] == nil {
-            selectedDevice = audio.getDefaultOutputDevice()
+            let fallback = audio.getDefaultOutputDevice()
+            selectedDevice = (fallback != kAudioDeviceUnknown) ? fallback : nil
         }
         delegate?.audioManagerDidChangeDevices(self)
     }

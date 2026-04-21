@@ -47,8 +47,10 @@ protocol Audio {
     func getDeviceTransportType(deviceID: AudioDeviceID) -> AudioDevicePropertyID
 
     // Property listeners — callers receive the `onChange` callback on the main queue.
-    func addDevicesListener(onChange: @escaping () -> Void) -> AudioListenerToken
-    func addDefaultOutputDeviceListener(onChange: @escaping () -> Void) -> AudioListenerToken
+    // Returns `nil` when HAL refuses the registration; callers should treat that as a no-op
+    // subscription and not store the token.
+    func addDevicesListener(onChange: @escaping () -> Void) -> AudioListenerToken?
+    func addDefaultOutputDeviceListener(onChange: @escaping () -> Void) -> AudioListenerToken?
     func removeListener(_ token: AudioListenerToken)
 }
 
@@ -59,6 +61,7 @@ final class AudioImpl: Audio {
     private static let listenerQueue = DispatchQueue(label: "com.multisoundchanger.audio.listener")
     private static var lastLoggedTimes: [String: TimeInterval] = [:]
     private static let logCooldown: TimeInterval = 2.0
+    private static let maxLoggedKeys = 64
 
     // Logs non-noErr statuses with a per-(op, status) 2-second cooldown so a disconnected device
     // can't flood the log. Returns `true` when the call succeeded.
@@ -74,6 +77,12 @@ final class AudioImpl: Audio {
             if let last = Self.lastLoggedTimes[key], now - last < Self.logCooldown {
                 shouldLog = false
             } else {
+                // Hard cap to keep pathological devices (flap storms, unique-status churn) from
+                // growing the cooldown dictionary without bound. Clearing loses some cooldown
+                // memory briefly but is bounded-work and never leaks.
+                if Self.lastLoggedTimes.count >= Self.maxLoggedKeys {
+                    Self.lastLoggedTimes.removeAll(keepingCapacity: true)
+                }
                 Self.lastLoggedTimes[key] = now
                 shouldLog = true
             }
@@ -311,11 +320,11 @@ final class AudioImpl: Audio {
 
     // MARK: Listeners
 
-    func addDevicesListener(onChange: @escaping () -> Void) -> AudioListenerToken {
+    func addDevicesListener(onChange: @escaping () -> Void) -> AudioListenerToken? {
         return addHardwareListener(selector: kAudioHardwarePropertyDevices, op: "addDevicesListener", onChange: onChange)
     }
 
-    func addDefaultOutputDeviceListener(onChange: @escaping () -> Void) -> AudioListenerToken {
+    func addDefaultOutputDeviceListener(onChange: @escaping () -> Void) -> AudioListenerToken? {
         return addHardwareListener(selector: kAudioHardwarePropertyDefaultOutputDevice, op: "addDefaultOutputDeviceListener", onChange: onChange)
     }
 
@@ -326,7 +335,7 @@ final class AudioImpl: Audio {
         )
     }
 
-    private func addHardwareListener(selector: AudioObjectPropertySelector, op: String, onChange: @escaping () -> Void) -> AudioListenerToken {
+    private func addHardwareListener(selector: AudioObjectPropertySelector, op: String, onChange: @escaping () -> Void) -> AudioListenerToken? {
         var address = AudioObjectPropertyAddress(
             mSelector: selector,
             mScope: AudioObjectPropertyScope(kAudioObjectPropertyScopeGlobal),
@@ -337,10 +346,12 @@ final class AudioImpl: Audio {
                 onChange()
             }
         }
-        check(
+        guard check(
             AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, Self.listenerQueue, block),
             op
-        )
+        ) else {
+            return nil
+        }
         return AudioListenerToken(objectID: AudioObjectID(kAudioObjectSystemObject), address: address, block: block)
     }
 

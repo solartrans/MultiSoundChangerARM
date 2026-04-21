@@ -35,17 +35,20 @@ extension StatusBarControllerImpl {
 
 // MARK: - Implementation
 
-final class StatusBarControllerImpl: StatusBarController {
+final class StatusBarControllerImpl: NSObject, StatusBarController {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let volumeController: VolumeViewController
     private let audioManager: AudioManager
     private var deviceMenuItems: [NSMenuItem] = []
     private var outputSectionAnchor: NSMenuItem?
+    private var isMenuOpen = false
+    private var pendingRefresh = false
 
     init(audioManager: AudioManager) {
         self.audioManager = audioManager
 
         self.volumeController = Stories.volume.controller(VolumeViewController.self)
+        super.init()
         self.volumeController.audioManager = audioManager
         self.volumeController.statusBarController = self
     }
@@ -56,8 +59,14 @@ final class StatusBarControllerImpl: StatusBarController {
             button.setAccessibilityLabel(Strings.volume)
         }
 
+        // Defensive: if createMenu is ever invoked twice, the prior device-item array and anchor
+        // would otherwise leak references to the stale menu's NSMenuItems.
+        deviceMenuItems.removeAll()
+        outputSectionAnchor = nil
+
         let menu = NSMenu()
         menu.autoenablesItems = false
+        menu.delegate = self
 
         let volumeItem = getMenuItem(by: .volume)
         let sliderItem = getMenuItem(by: .slider)
@@ -104,7 +113,12 @@ final class StatusBarControllerImpl: StatusBarController {
         guard let menu = statusItem.menu else {
             return
         }
-        // Pull out old device items, rebuild from current audio state.
+        // NSMenu mutation while the user has the menu open can crash AppKit's tracking machinery.
+        // Defer the refresh until menuDidClose fires.
+        if isMenuOpen {
+            pendingRefresh = true
+            return
+        }
         for item in deviceMenuItems {
             menu.removeItem(item)
         }
@@ -114,11 +128,21 @@ final class StatusBarControllerImpl: StatusBarController {
 
     func syncDefaultOutputDevice() {
         let defaultDevice = audioManager.getDefaultOutputDevice()
+        guard defaultDevice != kAudioDeviceUnknown else {
+            return
+        }
         let intTag = Int(defaultDevice)
         for item in deviceMenuItems {
             item.state = (item.tag == intTag) ? .on : .off
         }
-        selectDevice(device: defaultDevice)
+        // Track the system default without round-tripping through setOutputDevice — that would
+        // refire the default-output listener and could recurse.
+        audioManager.followSelectedDevice(deviceID: defaultDevice)
+        if let volume = audioManager.getSelectedDeviceVolume() {
+            let correctedVolume = audioManager.isMuted ? 0 : volume * 100
+            volumeController.updateSliderVolume(volume: correctedVolume)
+            changeStatusItemImage(value: correctedVolume)
+        }
     }
 
     private func populateDeviceList(in menu: NSMenu) {
@@ -133,10 +157,16 @@ final class StatusBarControllerImpl: StatusBarController {
         // Insert device items immediately after the "Output Device:" header so menu ordering
         // stays stable on refresh.
         let insertionStart: Int
-        if let anchor = outputSectionAnchor, let anchorIndex = menu.index(of: anchor) as Int?, anchorIndex >= 0 {
+        if let anchor = outputSectionAnchor {
+            let anchorIndex = menu.index(of: anchor)
+            guard anchorIndex >= 0 else {
+                Logger.warning("Output section anchor missing from menu; skipping device list rebuild")
+                return
+            }
             insertionStart = anchorIndex + 1
         } else {
-            insertionStart = menu.numberOfItems
+            Logger.warning("Output section anchor not set; skipping device list rebuild")
+            return
         }
 
         var cursor = insertionStart
@@ -240,5 +270,21 @@ final class StatusBarControllerImpl: StatusBarController {
     @objc
     private func menuQuitAction() {
         NSApplication.shared.terminate(self)
+    }
+}
+
+// MARK: - NSMenuDelegate
+
+extension StatusBarControllerImpl: NSMenuDelegate {
+    func menuWillOpen(_ menu: NSMenu) {
+        isMenuOpen = true
+    }
+
+    func menuDidClose(_ menu: NSMenu) {
+        isMenuOpen = false
+        if pendingRefresh {
+            pendingRefresh = false
+            refreshDeviceList()
+        }
     }
 }
