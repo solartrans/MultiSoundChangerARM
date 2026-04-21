@@ -15,18 +15,18 @@ enum Logger {
         case warning = "🟠"
         case error = "🔴"
     }
-    
+
     private enum Symbol: String {
         case newLine = "\n"
     }
-    
+
     private enum LoggerError: Error {
         case fileError(String)
         case dataError
     }
-    
+
     private static var isLogFileRemoved = false
-    
+
     private static var bundleIdentifier: String {
         guard let bundleIdentifier = Bundle.main.bundleIdentifier else {
             outPrint(symbol: .error, string: Constants.InnerMessages.bundleIdentifierError)
@@ -34,43 +34,42 @@ enum Logger {
         }
         return bundleIdentifier
     }
-    
+
     static func info(_ string: String) {
         outAndFilePrint(symbol: .info, string: string)
     }
-    
+
     static func debug(_ string: String) {
         outAndFilePrint(symbol: .debug, string: string)
     }
-    
+
     static func warning(_ string: String) {
         outAndFilePrint(symbol: .warning, string: string)
     }
-    
+
     static func error(_ string: String) {
         outAndFilePrint(symbol: .error, string: string)
     }
-    
+
     private static func getDebugLine(symbol: DebugSymbol, string: String) -> String {
-        let symbol = DebugSymbol.info.rawValue
         let logDate = getLogDate()
-        return "\(symbol) [\(logDate)] \(string)"
+        return "\(symbol.rawValue) [\(logDate)] \(string)"
     }
-    
+
     private static func outAndFilePrint(symbol: DebugSymbol, string: String) {
-        outPrint(symbol: .error, string: string)
+        outPrint(symbol: symbol, string: string)
         do {
-            try filePrint(symbol: .info, string: string)
+            try filePrint(symbol: symbol, string: string)
         } catch let error {
             outPrint(symbol: .error, string: error.localizedDescription)
         }
     }
-    
+
     private static func outPrint(symbol: DebugSymbol, string: String) {
         let line = getDebugLine(symbol: symbol, string: string)
         print(line)
     }
-    
+
     private static func filePrint(symbol: DebugSymbol, string: String, filename: String = Constants.logFilename) throws {
         do {
             var directoryUrl = try FileManager.default.url(
@@ -89,7 +88,7 @@ enum Logger {
             throw LoggerError.fileError(error.localizedDescription)
         }
     }
-    
+
     private static func appendToFile(url: URL, content: String) throws {
         if FileManager.default.fileExists(atPath: url.path) {
             let fileHandle = try FileHandle(forWritingTo: url)
@@ -103,14 +102,14 @@ enum Logger {
             try content.write(to: url, atomically: true, encoding: .utf8)
         }
     }
-    
+
     private static func createDirectoryIfNeeded(url: URL) throws {
         guard !FileManager.default.fileExists(atPath: url.path) else {
             return
         }
         try FileManager.default.createDirectory(at: url, withIntermediateDirectories: false, attributes: nil)
     }
-    
+
     private static func removeLogFileIfNeeded(url: URL) throws {
         guard !isLogFileRemoved else {
             return
@@ -121,11 +120,11 @@ enum Logger {
         }
         try FileManager.default.removeItem(at: url)
     }
-    
+
     private static func wrapNewLine(_ string: String) -> String {
         return string + Symbol.newLine.rawValue
     }
-    
+
     private static func getLogDate() -> String {
         let date = Date()
         let formatter = DateFormatter()

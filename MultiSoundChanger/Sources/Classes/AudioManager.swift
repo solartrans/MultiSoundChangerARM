@@ -160,9 +160,12 @@ final class AudioManagerImpl: AudioManager {
 
     func toggleMute() {
         if isSelectedDeviceMuted() {
+            // Only flip the mute flag. The previous implementation re-applied the current
+            // scalar volume after unmuting, which trapped users on drivers that zero the
+            // volume-scalar when muted (or users who were at 0 volume before muting): the
+            // re-apply of 0 triggered `setSelectedDeviceVolume`'s auto-mute and immediately
+            // re-muted the device.
             setSelectedDeviceMute(isMute: false)
-            let volume = getSelectedDeviceVolume() ?? 0
-            setSelectedDeviceVolume(volume: volume)
         } else {
             setSelectedDeviceMute(isMute: true)
         }

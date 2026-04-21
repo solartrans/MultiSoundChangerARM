@@ -163,7 +163,9 @@ private final class OSDWindow: NSWindow {
 
     private func repositionOn(screen: NSScreen) {
         let size = OSDWindow.windowSize
-        let frame = screen.frame
+        // Use visibleFrame so the OSD respects the menu bar / dock instead of potentially
+        // overlapping either on the primary display.
+        let frame = screen.visibleFrame
         let xPos = frame.midX - size.width / 2
         let yPos = frame.midY + frame.height / 4 - size.height / 2
         self.setFrameOrigin(NSPoint(x: xPos, y: yPos))
