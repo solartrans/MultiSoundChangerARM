@@ -15,6 +15,8 @@ This version has been rebuilt to support both Intel (x86_64) and Apple Silicon (
 - Intel Macs (x86_64)
 - Apple Silicon Macs (ARM64: M1, M2, M3, M4)
 
+**Minimum macOS**: 11.0 (Big Sur). Earlier macOS versions are no longer supported in this fork; see [ARM64_MIGRATION.md](ARM64_MIGRATION.md) for details.
+
 
 Features:
 * **Changing sound volume of every device** (even virtual aggregate device volume by changing volume of every device in aggregate device)

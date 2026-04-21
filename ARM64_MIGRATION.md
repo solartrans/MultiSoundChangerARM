@@ -183,20 +183,24 @@ The new native OSD implementation provides:
 
 ## Rollback Instructions
 
-If you need to revert to the x86_64-only version:
+The ARM64 migration began with commit `c767aba` ("Rebuild app for ARM64
+(Apple Silicon) support"). To revert fully to the x86_64-only 1.0.1
+release:
 
-1. Restore the original files from git history:
-   ```bash
-   git checkout HEAD~1 -- MultiSoundChanger.xcodeproj/project.pbxproj
-   git checkout HEAD~1 -- MultiSoundChanger/Other/MultiSoundChanger-Bridging-Header.h
-   ```
+```bash
+git checkout 135f003   # [Release] 1.0.1 — last pre-ARM64 tagged commit
+```
 
-2. Delete the new file:
-   ```bash
-   rm MultiSoundChanger/Sources/Frameworks/NativeOSDManager.swift
-   ```
+Or, to keep your branch but reset to the pre-migration parent:
 
-3. Restore OSD.framework dependency
+```bash
+git reset --hard c767aba^
+```
+
+Note: the on-disk `OSD.framework/` directory is a leftover from the
+pre-migration state. It is no longer referenced by `project.pbxproj`,
+`MultiSoundChanger-Bridging-Header.h`, or any source file, so it can be
+removed without affecting the build.
 
 ## Questions or Issues?
 
