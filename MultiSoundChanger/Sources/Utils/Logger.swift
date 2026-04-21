@@ -37,10 +37,14 @@ enum Logger {
         }
     }
 
+    // `isLogFileRemoved` is mutable state but is ONLY ever touched from inside the
+    // `fileWriteQueue.async` block below — all `filePrint` → `removeLogFileIfNeeded` callers
+    // funnel through that serial queue. A `DispatchQueue(label:)` with no attributes is serial
+    // by default, so reads and writes here are naturally sequenced without an explicit lock.
     private static var isLogFileRemoved = false
     // Serialize and offload file I/O so per-keypress logging (AudioManager.selectDevice,
     // ApplicationController.onMediaKeyTap) doesn't stall the main thread on FileManager /
-    // FileHandle syscalls.
+    // FileHandle syscalls. Serial-by-default — do not pass `.concurrent`.
     private static let fileWriteQueue = DispatchQueue(label: "com.multisoundchanger.logger")
 
     private static var bundleIdentifier: String {
