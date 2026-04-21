@@ -58,29 +58,33 @@ extension ApplicationControllerImp: MediaManagerDelegate {
         switch mediaKey {
         case .volumeUp:
             volume = (volume + volumeStep).clamped(to: 0...1)
+            paintVolumeFeedback(volume)
             audioManager.setSelectedDeviceVolume(volume: volume)
 
         case .volumeDown:
             volume = (volume - volumeStep).clamped(to: 0...1)
+            paintVolumeFeedback(volume)
             audioManager.setSelectedDeviceVolume(volume: volume)
 
         case .mute:
+            // Mute path needs the post-toggle state to choose the OSD glyph, so the HAL write
+            // has to come first here — unlike volumeUp/Down where we already know the target.
             audioManager.toggleMute()
-            if audioManager.isMuted {
-                volume = 0
-            } else {
-                volume = audioManager.getSelectedDeviceVolume() ?? 0
-            }
+            volume = audioManager.isMuted ? 0 : (audioManager.getSelectedDeviceVolume() ?? 0)
+            paintVolumeFeedback(volume)
 
         default:
             break
         }
+    }
 
+    /// Paint the slider, status-bar icon, and OSD for the given 0…1 volume BEFORE the HAL
+    /// `setSelectedDeviceVolume` call, so the visual feedback appears immediately instead of
+    /// waiting for the CoreAudio round-trip (especially multi-sub-device aggregate writes).
+    private func paintVolumeFeedback(_ volume: Float) {
         let correctedVolume = volume * 100
-
         statusBarController.updateVolume(value: correctedVolume)
         mediaManager.showOSD(volume: correctedVolume, chicletsCount: Constants.chicletsCount)
-
         Logger.debug(Constants.InnerMessages.selectedDeviceVolume(volume: String(correctedVolume)))
     }
 }

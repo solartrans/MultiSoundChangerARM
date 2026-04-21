@@ -175,37 +175,25 @@ final class AudioImpl: Audio {
         var leftLevelPropertyAddress = volumeScalarPropertyAddress(element: 1)
         var rightLevelPropertyAddress = volumeScalarPropertyAddress(element: 2)
 
-        var size = UInt32(0)
+        // `kAudioDevicePropertyVolumeScalar` is always a `Float32` per Apple's HAL contract;
+        // skipping the per-element `AudioObjectGetPropertyDataSize` probe halves the IPC
+        // round-trip count on the hotkey path (noticeable on aggregate devices with multiple
+        // sub-devices, where every volume keypress used to issue one probe + one set per element
+        // per sub-device).
+        let size = UInt32(MemoryLayout<Float32>.size)
 
-        if check(
-            AudioObjectGetPropertyDataSize(deviceID, &masterLevelPropertyAddress, 0, nil, &size),
-            "setDeviceVolume:master:GetPropertyDataSize"
-        ) {
-            check(
-                AudioObjectSetPropertyData(deviceID, &masterLevelPropertyAddress, 0, nil, size, &masterLevel),
-                "setDeviceVolume:master:SetPropertyData"
-            )
-        }
-
-        if check(
-            AudioObjectGetPropertyDataSize(deviceID, &leftLevelPropertyAddress, 0, nil, &size),
-            "setDeviceVolume:left:GetPropertyDataSize"
-        ) {
-            check(
-                AudioObjectSetPropertyData(deviceID, &leftLevelPropertyAddress, 0, nil, size, &leftLevel),
-                "setDeviceVolume:left:SetPropertyData"
-            )
-        }
-
-        if check(
-            AudioObjectGetPropertyDataSize(deviceID, &rightLevelPropertyAddress, 0, nil, &size),
-            "setDeviceVolume:right:GetPropertyDataSize"
-        ) {
-            check(
-                AudioObjectSetPropertyData(deviceID, &rightLevelPropertyAddress, 0, nil, size, &rightLevel),
-                "setDeviceVolume:right:SetPropertyData"
-            )
-        }
+        check(
+            AudioObjectSetPropertyData(deviceID, &masterLevelPropertyAddress, 0, nil, size, &masterLevel),
+            "setDeviceVolume:master:SetPropertyData"
+        )
+        check(
+            AudioObjectSetPropertyData(deviceID, &leftLevelPropertyAddress, 0, nil, size, &leftLevel),
+            "setDeviceVolume:left:SetPropertyData"
+        )
+        check(
+            AudioObjectSetPropertyData(deviceID, &rightLevelPropertyAddress, 0, nil, size, &rightLevel),
+            "setDeviceVolume:right:SetPropertyData"
+        )
     }
 
     func setDeviceMute(deviceID: AudioDeviceID, isMute: Bool) {
@@ -247,37 +235,25 @@ final class AudioImpl: Audio {
         var leftLevelPropertyAddress = volumeScalarPropertyAddress(element: 1)
         var rightLevelPropertyAddress = volumeScalarPropertyAddress(element: 2)
 
-        var size = UInt32(0)
+        // Same optimization as setDeviceVolume — the scalar is a known-size `Float32`, so skip
+        // the `GetPropertyDataSize` probe and halve the IPC round-trips on the read path.
+        // `ioDataSize` is inout on GetPropertyData — reset before each call.
+        var size = UInt32(MemoryLayout<Float32>.size)
 
-        if check(
-            AudioObjectGetPropertyDataSize(deviceID, &masterLevelPropertyAddress, 0, nil, &size),
-            "getDeviceVolume:master:GetPropertyDataSize"
-        ) {
-            check(
-                AudioObjectGetPropertyData(deviceID, &masterLevelPropertyAddress, 0, nil, &size, &masterLevel),
-                "getDeviceVolume:master:GetPropertyData"
-            )
-        }
-
-        if check(
-            AudioObjectGetPropertyDataSize(deviceID, &leftLevelPropertyAddress, 0, nil, &size),
-            "getDeviceVolume:left:GetPropertyDataSize"
-        ) {
-            check(
-                AudioObjectGetPropertyData(deviceID, &leftLevelPropertyAddress, 0, nil, &size, &leftLevel),
-                "getDeviceVolume:left:GetPropertyData"
-            )
-        }
-
-        if check(
-            AudioObjectGetPropertyDataSize(deviceID, &rightLevelPropertyAddress, 0, nil, &size),
-            "getDeviceVolume:right:GetPropertyDataSize"
-        ) {
-            check(
-                AudioObjectGetPropertyData(deviceID, &rightLevelPropertyAddress, 0, nil, &size, &rightLevel),
-                "getDeviceVolume:right:GetPropertyData"
-            )
-        }
+        check(
+            AudioObjectGetPropertyData(deviceID, &masterLevelPropertyAddress, 0, nil, &size, &masterLevel),
+            "getDeviceVolume:master:GetPropertyData"
+        )
+        size = UInt32(MemoryLayout<Float32>.size)
+        check(
+            AudioObjectGetPropertyData(deviceID, &leftLevelPropertyAddress, 0, nil, &size, &leftLevel),
+            "getDeviceVolume:left:GetPropertyData"
+        )
+        size = UInt32(MemoryLayout<Float32>.size)
+        check(
+            AudioObjectGetPropertyData(deviceID, &rightLevelPropertyAddress, 0, nil, &size, &rightLevel),
+            "getDeviceVolume:right:GetPropertyData"
+        )
 
         return [masterLevel, leftLevel, rightLevel]
     }
