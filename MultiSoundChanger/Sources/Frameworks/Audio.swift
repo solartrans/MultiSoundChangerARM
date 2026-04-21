@@ -316,43 +316,6 @@ final class AudioImpl: Audio {
         return deviceTransportType
     }
 
-    // MARK: Listeners
-
-    func addDevicesListener(onChange: @escaping () -> Void) -> AudioListenerToken? {
-        return addHardwareListener(selector: kAudioHardwarePropertyDevices, op: "addDevicesListener", onChange: onChange)
-    }
-
-    func addDefaultOutputDeviceListener(onChange: @escaping () -> Void) -> AudioListenerToken? {
-        return addHardwareListener(selector: kAudioHardwarePropertyDefaultOutputDevice, op: "addDefaultOutputDeviceListener", onChange: onChange)
-    }
-
-    func removeListener(_ token: AudioListenerToken) {
-        check(
-            AudioObjectRemovePropertyListenerBlock(token.objectID, &token.address, Self.listenerQueue, token.block),
-            "removeListener"
-        )
-    }
-
-    private func addHardwareListener(selector: AudioObjectPropertySelector, op: String, onChange: @escaping () -> Void) -> AudioListenerToken? {
-        var address = AudioObjectPropertyAddress(
-            mSelector: selector,
-            mScope: AudioObjectPropertyScope(kAudioObjectPropertyScopeGlobal),
-            mElement: kAudioPropertyElement
-        )
-        let block: AudioObjectPropertyListenerBlock = { _, _ in
-            DispatchQueue.main.async {
-                onChange()
-            }
-        }
-        guard check(
-            AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, Self.listenerQueue, block),
-            op
-        ) else {
-            return nil
-        }
-        return AudioListenerToken(objectID: AudioObjectID(kAudioObjectSystemObject), address: address, block: block)
-    }
-
     // MARK: Helpers
 
     private func volumeScalarPropertyAddress(element: AudioObjectPropertyElement) -> AudioObjectPropertyAddress {
@@ -435,5 +398,44 @@ final class AudioImpl: Audio {
         }
 
         return devices
+    }
+}
+
+// MARK: - Listeners
+
+extension AudioImpl {
+    func addDevicesListener(onChange: @escaping () -> Void) -> AudioListenerToken? {
+        return addHardwareListener(selector: kAudioHardwarePropertyDevices, op: "addDevicesListener", onChange: onChange)
+    }
+
+    func addDefaultOutputDeviceListener(onChange: @escaping () -> Void) -> AudioListenerToken? {
+        return addHardwareListener(selector: kAudioHardwarePropertyDefaultOutputDevice, op: "addDefaultOutputDeviceListener", onChange: onChange)
+    }
+
+    func removeListener(_ token: AudioListenerToken) {
+        check(
+            AudioObjectRemovePropertyListenerBlock(token.objectID, &token.address, Self.listenerQueue, token.block),
+            "removeListener"
+        )
+    }
+
+    fileprivate func addHardwareListener(selector: AudioObjectPropertySelector, op: String, onChange: @escaping () -> Void) -> AudioListenerToken? {
+        var address = AudioObjectPropertyAddress(
+            mSelector: selector,
+            mScope: AudioObjectPropertyScope(kAudioObjectPropertyScopeGlobal),
+            mElement: kAudioPropertyElement
+        )
+        let block: AudioObjectPropertyListenerBlock = { _, _ in
+            DispatchQueue.main.async {
+                onChange()
+            }
+        }
+        guard check(
+            AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, Self.listenerQueue, block),
+            op
+        ) else {
+            return nil
+        }
+        return AudioListenerToken(objectID: AudioObjectID(kAudioObjectSystemObject), address: address, block: block)
     }
 }
