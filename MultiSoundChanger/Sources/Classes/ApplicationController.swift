@@ -66,7 +66,7 @@ extension ApplicationControllerImp: MediaManagerDelegate {
 
         case .mute:
             audioManager.toggleMute()
-            if audioManager.isSelectedDeviceMuted() {
+            if audioManager.isMuted {
                 volume = 0
             } else {
                 volume = audioManager.getSelectedDeviceVolume() ?? 0

@@ -22,7 +22,6 @@ protocol AudioManager: AnyObject {
     func selectDevice(deviceID: AudioDeviceID)
     func getSelectedDeviceVolume() -> Float?
     func setSelectedDeviceVolume(volume: Float)
-    func isSelectedDeviceMuted() -> Bool
     func toggleMute()
     // Update the app's selected device to track an external default-output change (e.g. the user
     // switched output in System Settings) without round-tripping through setOutputDevice — which
@@ -125,7 +124,7 @@ final class AudioManagerImpl: AudioManager {
         }
     }
 
-    func setSelectedDeviceMute(isMute: Bool) {
+    private func setSelectedDeviceMute(isMute: Bool) {
         guard let selectedDevice = selectedDevice else {
             return
         }
@@ -141,7 +140,7 @@ final class AudioManagerImpl: AudioManager {
         }
     }
 
-    func isSelectedDeviceMuted() -> Bool {
+    private func isSelectedDeviceMuted() -> Bool {
         guard let selectedDevice = selectedDevice else {
             return false
         }
