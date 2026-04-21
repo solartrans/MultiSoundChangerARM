@@ -80,7 +80,7 @@ enum Logger {
             )
             directoryUrl.appendPathComponent(bundleIdentifier)
             try createDirectoryIfNeeded(url: directoryUrl)
-            let fileUrl = directoryUrl.appendingPathComponent(Constants.logFilename, isDirectory: false)
+            let fileUrl = directoryUrl.appendingPathComponent(filename, isDirectory: false)
             let line = wrapNewLine(getDebugLine(symbol: symbol, string: string))
             try removeLogFileIfNeeded(url: fileUrl)
             try appendToFile(url: fileUrl, content: line)

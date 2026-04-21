@@ -96,12 +96,12 @@ final class MediaManagerImpl: MediaManager {
     }
 
     private func observeMediaKeyOnAccessibiltiyApiChange() {
-        let notificaion = NSNotification.Name(rawValue: Constants.Notifications.accessibility)
+        let notification = NSNotification.Name(rawValue: Constants.Notifications.accessibility)
 
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(onAccessibilityNotification),
-            name: notificaion,
+            name: notification,
             object: nil
         )
     }

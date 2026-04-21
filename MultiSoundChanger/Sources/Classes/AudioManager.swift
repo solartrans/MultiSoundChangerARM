@@ -42,6 +42,7 @@ final class AudioManagerImpl: AudioManager {
     private var devices: [AudioDeviceID: String]?
     private var selectedDevice: AudioDeviceID?
     private var listenerTokens: [AudioListenerToken] = []
+    private var volumeBeforeMute: Float?
 
     init() {
         devices = audio.getOutputDevices()
@@ -160,13 +161,22 @@ final class AudioManagerImpl: AudioManager {
 
     func toggleMute() {
         if isSelectedDeviceMuted() {
-            // Only flip the mute flag. The previous implementation re-applied the current
-            // scalar volume after unmuting, which trapped users on drivers that zero the
-            // volume-scalar when muted (or users who were at 0 volume before muting): the
-            // re-apply of 0 triggered `setSelectedDeviceVolume`'s auto-mute and immediately
-            // re-muted the device.
             setSelectedDeviceMute(isMute: false)
+            // Some drivers zero the volume scalar while muted. If we come back to an
+            // effectively-zero scalar after unmuting, restore the pre-mute volume so the
+            // user doesn't appear stuck at 0% audio. If the pre-mute volume was itself
+            // below the auto-mute lowerbound (user deliberately muted silence), leave the
+            // scalar alone — re-applying 0 here would re-trigger the auto-mute branch in
+            // setSelectedDeviceVolume and undo the unmute.
+            if let pre = volumeBeforeMute,
+               pre >= Constants.muteVolumeLowerbound,
+               let current = getSelectedDeviceVolume(),
+               current < Constants.muteVolumeLowerbound {
+                setSelectedDeviceVolume(volume: pre)
+            }
+            volumeBeforeMute = nil
         } else {
+            volumeBeforeMute = getSelectedDeviceVolume()
             setSelectedDeviceMute(isMute: true)
         }
     }
