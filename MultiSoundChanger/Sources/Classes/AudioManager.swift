@@ -65,10 +65,6 @@ final class AudioManagerImpl: AudioManager {
         return devices
     }
 
-    func isAggregateDevice(deviceID: AudioDeviceID) -> Bool {
-        return audio.isAggregateDevice(deviceID: deviceID)
-    }
-
     func selectDevice(deviceID: AudioDeviceID) {
         selectedDevice = deviceID
         audio.setOutputDevice(newDeviceID: deviceID)

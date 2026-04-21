@@ -26,15 +26,15 @@ protocol MediaManager: AnyObject {
 final class MediaManagerImpl: MediaManager {
     private weak var delegate: MediaManagerDelegate?
     private var mediaKeyTap: MediaKeyTap?
-    
+
     init(delegate: MediaManagerDelegate) {
         self.delegate = delegate
     }
-    
+
     deinit {
         DistributedNotificationCenter.default().removeObserver(self)
     }
-    
+
     // MARK: Public
 
     func listenMediaKeyTaps() {
@@ -42,7 +42,7 @@ final class MediaManagerImpl: MediaManager {
         acquirePrivileges()
         startMediaKeyTap()
     }
-    
+
     func showOSD(volume: Float, chicletsCount: Int = 16) {
         let manager = OSDManager.sharedManager()
 
@@ -68,21 +68,21 @@ final class MediaManagerImpl: MediaManager {
             locked: false
         )
     }
-    
+
     // MARK: Private
-    
+
     private func acquirePrivileges() {
         let trusted = kAXTrustedCheckOptionPrompt.takeUnretainedValue()
         let privOptions = [trusted: true] as CFDictionary
         let accessEnabled = AXIsProcessTrustedWithOptions(privOptions)
-        
+
         if accessEnabled {
             Logger.warning(Constants.InnerMessages.accessEnabled)
         } else {
             Logger.warning(Constants.InnerMessages.accessDenied)
         }
     }
-    
+
     private func startMediaKeyTap() {
         let keys: [MediaKey] = [
             .volumeUp,
@@ -94,10 +94,10 @@ final class MediaManagerImpl: MediaManager {
         mediaKeyTap = MediaKeyTap(delegate: self, for: keys, observeBuiltIn: true)
         mediaKeyTap?.start()
     }
-    
+
     private func observeMediaKeyOnAccessibiltiyApiChange() {
         let notificaion = NSNotification.Name(rawValue: Constants.Notifications.accessibility)
-        
+
         DistributedNotificationCenter.default().addObserver(
             self,
             selector: #selector(onAccessibilityNotification),
@@ -105,7 +105,7 @@ final class MediaManagerImpl: MediaManager {
             object: nil
         )
     }
-    
+
     @objc
     private func onAccessibilityNotification(_ aNotification: Notification) {
         DispatchQueue.main.async { [weak self] in

@@ -44,7 +44,6 @@ protocol Audio {
     func isDeviceMuted(deviceID: AudioDeviceID) -> Bool
     func getDeviceVolume(deviceID: AudioDeviceID) -> [Float]
     func getDefaultOutputDevice() -> AudioDeviceID
-    func getDeviceTransportType(deviceID: AudioDeviceID) -> AudioDevicePropertyID
 
     // Property listeners — callers receive the `onChange` callback on the main queue.
     // Returns `nil` when HAL refuses the registration; callers should treat that as a no-op
@@ -301,7 +300,7 @@ final class AudioImpl: Audio {
         return deviceID
     }
 
-    func getDeviceTransportType(deviceID: AudioDeviceID) -> AudioDevicePropertyID {
+    private func getDeviceTransportType(deviceID: AudioDeviceID) -> AudioDevicePropertyID {
         var deviceTransportType = AudioDevicePropertyID()
         var propertySize = UInt32(MemoryLayout<AudioDevicePropertyID>.size)
 

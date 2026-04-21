@@ -12,8 +12,7 @@ import MediaKeyTap
 
 final class VolumeViewController: NSViewController {
     @IBOutlet weak var volumeSlider: NSSlider!
-    private var muted: Bool = false
-    
+
     weak var statusBarController: StatusBarController?
     var audioManager: AudioManager?
     
