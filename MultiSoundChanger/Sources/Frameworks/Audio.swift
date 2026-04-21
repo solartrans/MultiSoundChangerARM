@@ -10,14 +10,10 @@ import AudioToolbox
 import Cocoa
 import Foundation
 
-// `kAudioObjectPropertyElementMaster` was renamed to `kAudioObjectPropertyElementMain` in macOS 12.
-// Both resolve to element 0; this helper silences the deprecation warning while keeping macOS 11 support.
-private let kAudioPropertyElement: AudioObjectPropertyElement = {
-    if #available(macOS 12.0, *) {
-        return kAudioObjectPropertyElementMain
-    }
-    return kAudioObjectPropertyElementMaster
-}()
+// `kAudioObjectPropertyElementMaster` was renamed to `kAudioObjectPropertyElementMain` in macOS 12;
+// both symbols resolve to element 0 and the value is invariant across CoreAudio versions. Using the
+// literal keeps the deployment floor at 11.0 without producing a deprecation warning on macOS 12+ SDKs.
+private let kAudioPropertyElement: AudioObjectPropertyElement = 0
 
 // MARK: - Protocols
 
@@ -262,29 +258,6 @@ final class AudioImpl: Audio {
         var result: CFString = "" as CFString
         
         AudioObjectGetPropertyData(deviceID, &propertyAddress, 0, nil, &propertySize, &result)
-        
-        return result as String
-    }
-    
-    private func getDeviceType(deviceID: AudioDeviceID) -> String {
-        var propertyAddress = AudioObjectPropertyAddress(
-            mSelector: AudioObjectPropertySelector(kAudioDevicePropertyDataSourceNameForIDCFString),
-            mScope: AudioObjectPropertyScope(kAudioObjectPropertyScopeOutput),
-            mElement: kAudioPropertyElement)
-        
-        var sourceID: UInt32 = 0
-        var result: CFString = "" as CFString
-        
-        var translation = AudioValueTranslation(
-            mInputData: withUnsafeMutablePointer(to: &sourceID) { pointer in pointer },
-            mInputDataSize: UInt32(MemoryLayout<UInt32>.size),
-            mOutputData: withUnsafeMutablePointer(to: &result) { pointer in pointer },
-            mOutputDataSize: UInt32(MemoryLayout<CFString>.size)
-        )
-        
-        var propertySize = UInt32(MemoryLayout<AudioValueTranslation>.size)
-        
-        AudioObjectGetPropertyData(deviceID, &propertyAddress, 0, nil, &propertySize, &translation)
         
         return result as String
     }
