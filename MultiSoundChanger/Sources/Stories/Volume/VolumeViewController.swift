@@ -18,7 +18,7 @@ final class VolumeViewController: NSViewController {
     var audioManager: AudioManager?
     
     private func changeDeviceVolume(value: Float) {
-        audioManager?.setSelectedDeviceVolume(masterChannelLevel: value, leftChannelLevel: value, rightChannelLevel: value)
+        audioManager?.setSelectedDeviceVolume(volume: value)
     }
     
     func updateSliderVolume(volume: Float) {

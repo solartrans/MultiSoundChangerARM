@@ -16,7 +16,7 @@ protocol AudioManager: AnyObject {
     func getOutputDevices() -> [AudioDeviceID: String]?
     func selectDevice(deviceID: AudioDeviceID)
     func getSelectedDeviceVolume() -> Float?
-    func setSelectedDeviceVolume(masterChannelLevel: Float, leftChannelLevel: Float, rightChannelLevel: Float)
+    func setSelectedDeviceVolume(volume: Float)
     func isSelectedDeviceMuted() -> Bool
     func toggleMute()
 
@@ -72,33 +72,31 @@ final class AudioManagerImpl: AudioManager {
         return nil
     }
     
-    func setSelectedDeviceVolume(masterChannelLevel: Float, leftChannelLevel: Float, rightChannelLevel: Float) {
+    func setSelectedDeviceVolume(volume: Float) {
         guard let selectedDevice = selectedDevice else {
             return
         }
-        
-        let isMute = masterChannelLevel < Constants.muteVolumeLowerbound
-            && leftChannelLevel < Constants.muteVolumeLowerbound
-            && rightChannelLevel < Constants.muteVolumeLowerbound
-        
+
+        let isMute = volume < Constants.muteVolumeLowerbound
+
         if audio.isAggregateDevice(deviceID: selectedDevice) {
             let aggregatedDevices = audio.getAggregateDeviceSubDeviceList(deviceID: selectedDevice)
-            
+
             for device in aggregatedDevices {
                 audio.setDeviceVolume(
                     deviceID: device,
-                    masterChannelLevel: masterChannelLevel,
-                    leftChannelLevel: leftChannelLevel,
-                    rightChannelLevel: rightChannelLevel
+                    masterChannelLevel: volume,
+                    leftChannelLevel: volume,
+                    rightChannelLevel: volume
                 )
                 audio.setDeviceMute(deviceID: device, isMute: isMute)
             }
         } else {
             audio.setDeviceVolume(
                 deviceID: selectedDevice,
-                masterChannelLevel: masterChannelLevel,
-                leftChannelLevel: leftChannelLevel,
-                rightChannelLevel: rightChannelLevel
+                masterChannelLevel: volume,
+                leftChannelLevel: volume,
+                rightChannelLevel: volume
             )
             audio.setDeviceMute(deviceID: selectedDevice, isMute: isMute)
         }
@@ -142,7 +140,7 @@ final class AudioManagerImpl: AudioManager {
         if isSelectedDeviceMuted() {
             setSelectedDeviceMute(isMute: false)
             let volume = getSelectedDeviceVolume() ?? 0
-            setSelectedDeviceVolume(masterChannelLevel: volume, leftChannelLevel: volume, rightChannelLevel: volume)
+            setSelectedDeviceVolume(volume: volume)
         } else {
             setSelectedDeviceMute(isMute: true)
         }
