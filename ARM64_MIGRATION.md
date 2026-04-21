@@ -165,7 +165,7 @@ The new native OSD implementation provides:
 
 - **Minimum macOS Version**: 11.0 (Big Sur) — raised from 10.10 to enable ARM64 support
 - **Recommended macOS Version**: 11.0 or later
-- **Code Signing**: Currently set to manual with no identity ("-")
+- **Code Signing**: Manual with ad-hoc identity (`CODE_SIGN_IDENTITY = "-"`) for local development. Hardened Runtime enabled (`ENABLE_HARDENED_RUNTIME = YES`) with an empty `MultiSoundChanger/Other/MultiSoundChanger.entitlements` file wired via `CODE_SIGN_ENTITLEMENTS`. No Hardened-Runtime exceptions are needed — the app has no JIT, no dylib injection, no outgoing Apple Events. Switch `CODE_SIGN_IDENTITY` to a Developer ID Application certificate and submit to `notarytool` for distribution.
 - **Deployment**: Works on both Intel and Apple Silicon Macs
 
 ## Known Issues / Future Improvements
