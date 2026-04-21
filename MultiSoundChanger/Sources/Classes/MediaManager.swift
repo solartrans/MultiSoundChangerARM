@@ -38,6 +38,12 @@ final class MediaManagerImpl: MediaManager {
     }
 
     deinit {
+        // Cancel any still-scheduled accessibility-notification work so a late fire can't
+        // reference a mid-deallocation self. Mirrors AudioManagerImpl.deinit's handling of
+        // pendingApplyItem. Safe in practice because our weak-self capture no-ops when
+        // self is nil, but eliminates the tiny pending work item the runloop would
+        // otherwise hold for up to `accessibilityNotificationDebounce` seconds.
+        accessibilityNotificationWork?.cancel()
         DistributedNotificationCenter.default().removeObserver(self)
     }
 
