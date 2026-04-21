@@ -21,10 +21,23 @@ final class ApplicationControllerImp: ApplicationController {
     private lazy var audioManager: AudioManager = AudioManagerImpl()
     private lazy var mediaManager: MediaManager = MediaManagerImpl(delegate: self)
     private lazy var statusBarController: StatusBarController = StatusBarControllerImpl(audioManager: audioManager)
-    
+
     func start() {
         statusBarController.createMenu()
+        audioManager.delegate = self
         mediaManager.listenMediaKeyTaps()
+    }
+}
+
+// MARK: - AudioManagerDelegate
+
+extension ApplicationControllerImp: AudioManagerDelegate {
+    func audioManagerDidChangeDevices(_ manager: AudioManager) {
+        statusBarController.refreshDeviceList()
+    }
+
+    func audioManagerDidChangeDefaultOutputDevice(_ manager: AudioManager) {
+        statusBarController.syncDefaultOutputDevice()
     }
 }
 

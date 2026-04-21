@@ -15,6 +15,22 @@ import Foundation
 // literal keeps the deployment floor at 11.0 without producing a deprecation warning on macOS 12+ SDKs.
 private let kAudioPropertyElement: AudioObjectPropertyElement = 0
 
+// MARK: - Listener token
+
+// Opaque handle returned by `addXxxListener` and required for removal so the HAL can match
+// the exact block pointer it registered.
+final class AudioListenerToken {
+    fileprivate let objectID: AudioObjectID
+    fileprivate var address: AudioObjectPropertyAddress
+    fileprivate let block: AudioObjectPropertyListenerBlock
+
+    fileprivate init(objectID: AudioObjectID, address: AudioObjectPropertyAddress, block: @escaping AudioObjectPropertyListenerBlock) {
+        self.objectID = objectID
+        self.address = address
+        self.block = block
+    }
+}
+
 // MARK: - Protocols
 
 protocol Audio {
@@ -29,12 +45,18 @@ protocol Audio {
     func getDeviceVolume(deviceID: AudioDeviceID) -> [Float]
     func getDefaultOutputDevice() -> AudioDeviceID
     func getDeviceTransportType(deviceID: AudioDeviceID) -> AudioDevicePropertyID
+
+    // Property listeners — callers receive the `onChange` callback on the main queue.
+    func addDevicesListener(onChange: @escaping () -> Void) -> AudioListenerToken
+    func addDefaultOutputDeviceListener(onChange: @escaping () -> Void) -> AudioListenerToken
+    func removeListener(_ token: AudioListenerToken)
 }
 
 // MARK: - Implementation
 
 final class AudioImpl: Audio {
     private static let logQueue = DispatchQueue(label: "com.multisoundchanger.audio.log")
+    private static let listenerQueue = DispatchQueue(label: "com.multisoundchanger.audio.listener")
     private static var lastLoggedTimes: [String: TimeInterval] = [:]
     private static let logCooldown: TimeInterval = 2.0
 
@@ -286,6 +308,43 @@ final class AudioImpl: Audio {
 
         return deviceTransportType
     }
+
+    // MARK: Listeners
+
+    func addDevicesListener(onChange: @escaping () -> Void) -> AudioListenerToken {
+        return addHardwareListener(selector: kAudioHardwarePropertyDevices, op: "addDevicesListener", onChange: onChange)
+    }
+
+    func addDefaultOutputDeviceListener(onChange: @escaping () -> Void) -> AudioListenerToken {
+        return addHardwareListener(selector: kAudioHardwarePropertyDefaultOutputDevice, op: "addDefaultOutputDeviceListener", onChange: onChange)
+    }
+
+    func removeListener(_ token: AudioListenerToken) {
+        check(
+            AudioObjectRemovePropertyListenerBlock(token.objectID, &token.address, Self.listenerQueue, token.block),
+            "removeListener"
+        )
+    }
+
+    private func addHardwareListener(selector: AudioObjectPropertySelector, op: String, onChange: @escaping () -> Void) -> AudioListenerToken {
+        var address = AudioObjectPropertyAddress(
+            mSelector: selector,
+            mScope: AudioObjectPropertyScope(kAudioObjectPropertyScopeGlobal),
+            mElement: kAudioPropertyElement
+        )
+        let block: AudioObjectPropertyListenerBlock = { _, _ in
+            DispatchQueue.main.async {
+                onChange()
+            }
+        }
+        check(
+            AudioObjectAddPropertyListenerBlock(AudioObjectID(kAudioObjectSystemObject), &address, Self.listenerQueue, block),
+            op
+        )
+        return AudioListenerToken(objectID: AudioObjectID(kAudioObjectSystemObject), address: address, block: block)
+    }
+
+    // MARK: Helpers
 
     private func volumeScalarPropertyAddress(element: AudioObjectPropertyElement) -> AudioObjectPropertyAddress {
         return AudioObjectPropertyAddress(

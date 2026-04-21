@@ -15,6 +15,8 @@ protocol StatusBarController: AnyObject {
     func createMenu()
     func changeStatusItemImage(value: Float)
     func updateVolume(value: Float)
+    func refreshDeviceList()
+    func syncDefaultOutputDevice()
 }
 
 // MARK: - Extensions
@@ -37,15 +39,17 @@ final class StatusBarControllerImpl: StatusBarController {
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let volumeController: VolumeViewController
     private let audioManager: AudioManager
-    
+    private var deviceMenuItems: [NSMenuItem] = []
+    private var outputSectionAnchor: NSMenuItem?
+
     init(audioManager: AudioManager) {
         self.audioManager = audioManager
-        
+
         self.volumeController = Stories.volume.controller(VolumeViewController.self)
         self.volumeController.audioManager = audioManager
         self.volumeController.statusBarController = self
     }
-    
+
     func createMenu() {
         if let button = statusItem.button {
             button.image = Images.volumeImage1
@@ -54,7 +58,7 @@ final class StatusBarControllerImpl: StatusBarController {
 
         let menu = NSMenu()
         menu.autoenablesItems = false
-        
+
         let volumeItem = getMenuItem(by: .volume)
         let sliderItem = getMenuItem(by: .slider)
         let outputItem = getMenuItem(by: .output)
@@ -63,20 +67,22 @@ final class StatusBarControllerImpl: StatusBarController {
         let audioSetupItem = getMenuItem(by: .audioSetup)
         let secondSeparatorItem = getMenuItem(by: .separator)
         let quitItem = getMenuItem(by: .quit)
-        
+
+        outputSectionAnchor = outputItem
+
         menu.addItem(volumeItem)
         menu.addItem(sliderItem)
         menu.addItem(outputItem)
-        setOutputDeviceList(for: menu)
+        populateDeviceList(in: menu)
         menu.addItem(firstSeparatorItem)
         menu.addItem(soundPreferencesItem)
         menu.addItem(audioSetupItem)
         menu.addItem(secondSeparatorItem)
         menu.addItem(quitItem)
-        
+
         statusItem.menu = menu
     }
-    
+
     func changeStatusItemImage(value: Float) {
         if value <= 1 {
             statusItem.button?.image = Images.volumeImage1
@@ -88,63 +94,52 @@ final class StatusBarControllerImpl: StatusBarController {
             statusItem.button?.image = Images.volumeImage4
         }
     }
-    
+
     func updateVolume(value: Float) {
         volumeController.updateSliderVolume(volume: value)
         changeStatusItemImage(value: value)
     }
-    
-    private func getMenuItem(by type: MenuItem) -> NSMenuItem {
-        switch type {
-        case .volume:
-            let item = NSMenuItem(title: Strings.volume, action: nil, keyEquivalent: Constants.Keys.empty.rawValue)
-            item.isEnabled = false
-            return item
-            
-        case .slider:
-            let item = NSMenuItem(title: String(), action: nil, keyEquivalent: Constants.Keys.empty.rawValue)
-            item.view = volumeController.view
-            return item
-            
-        case .output:
-            let item = NSMenuItem(title: Strings.output, action: nil, keyEquivalent: Constants.Keys.empty.rawValue)
-            item.isEnabled = false
-            return item
-            
-        case .separator:
-            return NSMenuItem.separator()
-                
-        case .soundPreferences:
-            let item = NSMenuItem(
-                title: Strings.soundPreferences,
-                action: #selector(menuSoundPreferencesAction),
-                keyEquivalent: Constants.Keys.empty.rawValue
-            )
-            item.target = self
-            return item
-            
-        case .audioSetup:
-            let item = NSMenuItem(title: Strings.audioDevices, action: #selector(menuAudioSetupAction), keyEquivalent: Constants.Keys.empty.rawValue)
-            item.target = self
-            return item
-            
-        case .quit:
-            let item = NSMenuItem(title: Strings.quit, action: #selector(menuQuitAction), keyEquivalent: Constants.Keys.q.rawValue)
-            item.target = self
-            return item
+
+    func refreshDeviceList() {
+        guard let menu = statusItem.menu else {
+            return
         }
+        // Pull out old device items, rebuild from current audio state.
+        for item in deviceMenuItems {
+            menu.removeItem(item)
+        }
+        deviceMenuItems.removeAll()
+        populateDeviceList(in: menu)
     }
-    
-    private func setOutputDeviceList(for menu: NSMenu) {
+
+    func syncDefaultOutputDevice() {
+        let defaultDevice = audioManager.getDefaultOutputDevice()
+        let intTag = Int(defaultDevice)
+        for item in deviceMenuItems {
+            item.state = (item.tag == intTag) ? .on : .off
+        }
+        selectDevice(device: defaultDevice)
+    }
+
+    private func populateDeviceList(in menu: NSMenu) {
         guard let devices = audioManager.getOutputDevices() else {
             return
         }
-        
         let defaultDevice = audioManager.getDefaultOutputDevice()
         let sortedDevices = devices.sorted { lhs, rhs in
             lhs.value.localizedCaseInsensitiveCompare(rhs.value) == .orderedAscending
         }
 
+        // Insert device items immediately after the "Output Device:" header so menu ordering
+        // stays stable on refresh.
+        let insertionStart: Int
+        if let anchor = outputSectionAnchor, let anchorIndex = menu.index(of: anchor) as Int?, anchorIndex >= 0 {
+            insertionStart = anchorIndex + 1
+        } else {
+            insertionStart = menu.numberOfItems
+        }
+
+        var cursor = insertionStart
         for device in sortedDevices {
             let item = NSMenuItem(
                 title: truncate(device.value, length: Constants.optionMaxLength),
@@ -159,10 +154,53 @@ final class StatusBarControllerImpl: StatusBarController {
                 selectDevice(device: defaultDevice)
             }
 
-            menu.addItem(item)
+            menu.insertItem(item, at: cursor)
+            deviceMenuItems.append(item)
+            cursor += 1
         }
     }
-    
+
+    private func getMenuItem(by type: MenuItem) -> NSMenuItem {
+        switch type {
+        case .volume:
+            let item = NSMenuItem(title: Strings.volume, action: nil, keyEquivalent: Constants.Keys.empty.rawValue)
+            item.isEnabled = false
+            return item
+
+        case .slider:
+            let item = NSMenuItem(title: String(), action: nil, keyEquivalent: Constants.Keys.empty.rawValue)
+            item.view = volumeController.view
+            return item
+
+        case .output:
+            let item = NSMenuItem(title: Strings.output, action: nil, keyEquivalent: Constants.Keys.empty.rawValue)
+            item.isEnabled = false
+            return item
+
+        case .separator:
+            return NSMenuItem.separator()
+
+        case .soundPreferences:
+            let item = NSMenuItem(
+                title: Strings.soundPreferences,
+                action: #selector(menuSoundPreferencesAction),
+                keyEquivalent: Constants.Keys.empty.rawValue
+            )
+            item.target = self
+            return item
+
+        case .audioSetup:
+            let item = NSMenuItem(title: Strings.audioDevices, action: #selector(menuAudioSetupAction), keyEquivalent: Constants.Keys.empty.rawValue)
+            item.target = self
+            return item
+
+        case .quit:
+            let item = NSMenuItem(title: Strings.quit, action: #selector(menuQuitAction), keyEquivalent: Constants.Keys.q.rawValue)
+            item.target = self
+            return item
+        }
+    }
+
     private func selectDevice(device: AudioDeviceID) {
         audioManager.selectDevice(deviceID: device)
         guard let volume = audioManager.getSelectedDeviceVolume() else {
@@ -172,7 +210,7 @@ final class StatusBarControllerImpl: StatusBarController {
         volumeController.updateSliderVolume(volume: correctedVolume)
         changeStatusItemImage(value: correctedVolume)
     }
-    
+
     private func truncate(_ string: String, length: Int, trailing: String = "…") -> String {
         if string.count > length {
             return String(string.prefix(length)) + trailing
@@ -180,33 +218,25 @@ final class StatusBarControllerImpl: StatusBarController {
             return string
         }
     }
-    
+
     @objc
     private func menuItemAction(sender: NSMenuItem) {
-        guard let items = statusItem.menu?.items else {
-            return
+        for item in deviceMenuItems {
+            item.state = (item == sender) ? .on : .off
         }
-        for item in items {
-            if item == sender {
-                item.state = .on
-                let deviceID = AudioDeviceID(item.tag)
-                selectDevice(device: deviceID)
-            } else {
-                item.state = NSControl.StateValue.off
-            }
-        }
+        selectDevice(device: AudioDeviceID(sender.tag))
     }
-    
+
     @objc
     private func menuSoundPreferencesAction() {
         Runner.shell("open -b \(Constants.AppBundleIdentifier.systemPreferences) \(Constants.SystemPreferencesPane.sound)")
     }
-    
+
     @objc
     private func menuAudioSetupAction() {
         Runner.launchApplication(bundleIndentifier: Constants.AppBundleIdentifier.audioDevices, options: .default)
     }
-    
+
     @objc
     private func menuQuitAction() {
         NSApplication.shared.terminate(self)

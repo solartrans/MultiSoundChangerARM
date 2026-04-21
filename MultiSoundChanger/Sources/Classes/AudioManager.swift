@@ -11,6 +11,11 @@ import Foundation
 
 // MARK: - Protocols
 
+protocol AudioManagerDelegate: AnyObject {
+    func audioManagerDidChangeDevices(_ manager: AudioManager)
+    func audioManagerDidChangeDefaultOutputDevice(_ manager: AudioManager)
+}
+
 protocol AudioManager: AnyObject {
     func getDefaultOutputDevice() -> AudioDeviceID
     func getOutputDevices() -> [AudioDeviceID: String]?
@@ -21,19 +26,30 @@ protocol AudioManager: AnyObject {
     func toggleMute()
 
     var isMuted: Bool { get }
+    var delegate: AudioManagerDelegate? { get set }
 }
 
 // MARK: - Implementation
 
 final class AudioManagerImpl: AudioManager {
+    weak var delegate: AudioManagerDelegate?
+
     private let audio: Audio = AudioImpl()
-    private let devices: [AudioDeviceID: String]?
+    private var devices: [AudioDeviceID: String]?
     private var selectedDevice: AudioDeviceID?
-    
+    private var listenerTokens: [AudioListenerToken] = []
+
     init() {
         devices = audio.getOutputDevices()
         selectedDevice = audio.getDefaultOutputDevice()
         printDevices()
+        registerListeners()
+    }
+
+    deinit {
+        for token in listenerTokens {
+            audio.removeListener(token)
+        }
     }
     
     func getDefaultOutputDevice() -> AudioDeviceID {
@@ -158,5 +174,28 @@ final class AudioManagerImpl: AudioManager {
         for device in devices {
             Logger.debug(Constants.InnerMessages.debugDevice(deviceID: String(device.key), deviceName: device.value))
         }
+    }
+
+    private func registerListeners() {
+        listenerTokens.append(
+            audio.addDevicesListener { [weak self] in self?.handleDevicesChanged() }
+        )
+        listenerTokens.append(
+            audio.addDefaultOutputDeviceListener { [weak self] in self?.handleDefaultOutputChanged() }
+        )
+    }
+
+    private func handleDevicesChanged() {
+        devices = audio.getOutputDevices()
+        // If the currently selected device was removed, fall back to whatever the system default
+        // points at now — hotkeys and the slider keep working instead of silently no-oping.
+        if let current = selectedDevice, devices?[current] == nil {
+            selectedDevice = audio.getDefaultOutputDevice()
+        }
+        delegate?.audioManagerDidChangeDevices(self)
+    }
+
+    private func handleDefaultOutputChanged() {
+        delegate?.audioManagerDidChangeDefaultOutputDevice(self)
     }
 }
